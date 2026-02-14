@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
 use crate::sensors_plugin::{Config, SensorEvent, FLOW_SPEED_NAME};
 use bevy::color::palettes::css::{LIGHT_GRAY, WHITE};
 use bevy::prelude::*;
+use std::collections::BTreeMap;
 
 pub struct QuadroUiPlugin;
 
@@ -12,7 +12,7 @@ const FLOW_VALUE_POS: u32 = 50;
 #[derive(Resource, Default)]
 struct DataHistory {
     pub max: BTreeMap<String, String>,
-    pub v: BTreeMap<String, Vec<String>>
+    pub v: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Component)]
@@ -24,13 +24,28 @@ struct FlowSenseValues;
 #[derive(Component)]
 struct GraphData {
     pub v: Vec<f32>,
-    pub n: String
+    pub n: String,
 }
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
 struct QuadroGizmoConfig;
 
-fn draw_graphs(mut gizmos: Gizmos, mut quad_gizmo: Gizmos<QuadroGizmoConfig>, data: Res<DataHistory>) {
+fn draw_graph(builder: &mut ChildSpawnerCommands) {
+    builder.spawn((
+        Node {
+            display: Display::Grid,
+            padding: UiRect::all(px(3)),
+            ..default()
+        },
+        BackgroundColor(WHITE.into()),
+    ));
+}
+
+fn draw_graphs_initial(
+    mut gizmos: Gizmos,
+    mut quad_gizmo: Gizmos<QuadroGizmoConfig>,
+    data: Res<DataHistory>,
+) {
     // --- Konfiguration des Graphen ---
     let chart_width = 200.0;
     let chart_height = 100.0;
@@ -45,22 +60,33 @@ fn draw_graphs(mut gizmos: Gizmos, mut quad_gizmo: Gizmos<QuadroGizmoConfig>, da
     // Y-Achse (Links)
     gizmos.line_2d(Vec2::new(left, bottom), Vec2::new(left, top), Color::WHITE);
     // X-Achse (Unten)
-    gizmos.line_2d(Vec2::new(left, bottom), Vec2::new(right, bottom), Color::WHITE);
+    gizmos.line_2d(
+        Vec2::new(left, bottom),
+        Vec2::new(right, bottom),
+        Color::WHITE,
+    );
 
     // --- 2. Daten zeichnen (Grün) ---
-    if data.v.is_empty() { return; }
-
+    if data.v.is_empty() {
+        return;
+    }
 
     let keys: Vec<_> = data.v.keys().cloned().collect();
-    let values = data.v[&keys[0]].iter().filter_map(| str_value| str_value.parse::<f32>().ok() ).collect::<Vec<_>>();
+    let values = data.v[&keys[0]]
+        .iter()
+        .filter_map(|str_value| str_value.parse::<f32>().ok())
+        .collect::<Vec<_>>();
     let count = values.len();
     let step_x = (right - left) / (count as f32 - 1.0);
 
-    let max = values.iter().max_by(| a, b | a.total_cmp(b)).expect("No max?").clone();
+    let max = values
+        .iter()
+        .max_by(|a, b| a.total_cmp(b))
+        .expect("No max?")
+        .clone();
 
     // Wir iterieren durch die Punkte und zeichnen eine Linie zum jeweils nächsten Punkt
     for i in 0..count - 1 {
-
         let val_current = values[i];
         let val_next = values[i + 1];
 
@@ -81,17 +107,28 @@ fn draw_graphs(mut gizmos: Gizmos, mut quad_gizmo: Gizmos<QuadroGizmoConfig>, da
     }
 }
 
-fn update_values(mut commands: Commands, mut hist: ResMut<DataHistory>, mut msg_receiver: MessageReader<SensorEvent>, mut query: Query<&mut Text, With<FlowSenseValues>>) {
+fn update_values(
+    mut commands: Commands,
+    mut hist: ResMut<DataHistory>,
+    mut msg_receiver: MessageReader<SensorEvent>,
+    mut query: Query<&mut Text, With<FlowSenseValues>>,
+) {
     for sensor_event in msg_receiver.read() {
         if !sensor_event.sensor_name.eq(FLOW_SPEED_NAME) {
             return;
-        } 
+        }
         let v = sensor_event.sensor_value.clone();
         println!("update values: {}", &v);
         for mut text in &mut query {
             text.0 = v.clone();
-            hist.max.entry(sensor_event.sensor_name.clone()).and_modify(|v| *v = v.trim().to_string()).or_insert(v.clone());
-            hist.v.entry(sensor_event.sensor_name.clone()).and_modify(|vec| vec.push(v.trim().to_string())).or_insert(vec![v.clone()]);
+            hist.max
+                .entry(sensor_event.sensor_name.clone())
+                .and_modify(|v| *v = v.trim().to_string())
+                .or_insert(v.clone());
+            hist.v
+                .entry(sensor_event.sensor_name.clone())
+                .and_modify(|vec| vec.push(v.trim().to_string()))
+                .or_insert(vec![v.clone()]);
         }
     }
 }
@@ -100,47 +137,52 @@ fn init_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     // commands.spawn((TextBundle::from_section()));
     println!("init ui");
     let default_font = asset_server.load("fonts/SpaceMono-Regular.ttf");
-    (commands).spawn(Node {
-        width: percent(100),
-        ..default()
-    }).with_child((
-        Text::new(FLOW_SENS_TITLE),
-        TextFont {
-            font: default_font.clone(),
-            font_size: 26.,
+    (commands)
+        .spawn(Node {
+            width: percent(100),
             ..default()
-        },
-        TextLayout::new_with_justify(Justify::Left),
-        TextColor(LIGHT_GRAY.into()),
-        Node {
-            position_type: PositionType::Absolute,
-            top: px(8),
-            left: px(8),
-            ..default()
-        },
-        FlowSenseText,
-    )).with_child((
-        Text::new(format!("{:2}", 0.00)),
-        TextFont {
-            font: default_font,
-            font_size: 26.,
-            ..default()
-        },
-        TextLayout::new_with_justify(Justify::Left),
-        TextColor(LIGHT_GRAY.into()),
-        Node {
-            position_type: PositionType::Relative,
-            top: px(FLOW_VALUE_POS),
-            left: px(8),
-            ..default()
-        },
-        FlowSenseValues,
-    ));
+        })
+        .with_child((
+            Text::new(FLOW_SENS_TITLE),
+            TextFont {
+                font: default_font.clone(),
+                font_size: 26.,
+                ..default()
+            },
+            TextLayout::new_with_justify(Justify::Left),
+            TextColor(LIGHT_GRAY.into()),
+            Node {
+                position_type: PositionType::Absolute,
+                top: px(8),
+                left: px(8),
+                ..default()
+            },
+            FlowSenseText,
+        ))
+        .with_child((
+            Text::new(format!("{:2}", 0.00)),
+            TextFont {
+                font: default_font,
+                font_size: 26.,
+                ..default()
+            },
+            TextLayout::new_with_justify(Justify::Left),
+            TextColor(LIGHT_GRAY.into()),
+            Node {
+                position_type: PositionType::Relative,
+                top: px(FLOW_VALUE_POS),
+                left: px(8),
+                ..default()
+            },
+            FlowSenseValues,
+        ));
 }
 
 impl Plugin for QuadroUiPlugin {
     fn build(&self, app: &mut App) {
         app.init_gizmo_group::<QuadroGizmoConfig>();
-        app.init_resource::<DataHistory>().add_systems(Startup, init_ui).add_systems(Update, (update_values, draw_graphs));
+        app.init_resource::<DataHistory>()
+            .add_systems(Startup, init_ui)
+            .add_systems(Update, (update_values, draw_graphs_initial));
     }
 }

@@ -3671,6 +3671,7 @@ dependencies = [
  "bevy",
  "regex",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

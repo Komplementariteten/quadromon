@@ -1,0 +1,1 @@
+pub const MAX_RPM_VALUE: f32 = 1.0;

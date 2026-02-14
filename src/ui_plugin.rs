@@ -21,18 +21,26 @@ struct FlowSenseText;
 #[derive(Component)]
 struct FlowSenseValues;
 
-fn draw_graph(mut gizmos: Gizmos, data: Res<DataHistory>) {
+#[derive(Component)]
+struct GraphData {
+    pub v: Vec<f32>,
+    pub n: String
+}
+
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct QuadroGizmoConfig;
+
+fn draw_graphs(mut gizmos: Gizmos, mut quad_gizmo: Gizmos<QuadroGizmoConfig>, data: Res<DataHistory>) {
     // --- Konfiguration des Graphen ---
-    let window_width = 200.0;
-    let window_height = 400.0;
+    let chart_width = 200.0;
+    let chart_height = 100.0;
     let padding = 20.0;
 
     // Defines the bounds of the drawing area (Centered origin at 0,0)
-    let left = -window_width / 2.0 + padding;
-    let right = window_width / 2.0 - padding;
-    let bottom = -window_height / 2.0 + padding;
-    let top = window_height / 2.0 - padding;
-
+    let left = -chart_width / 2.0 + padding;
+    let right = chart_width / 2.0 - padding;
+    let bottom = -chart_height / 2.0 + padding;
+    let top = chart_height / 2.0 - padding;
     // --- 1. Achsen zeichnen (Weiß) ---
     // Y-Achse (Links)
     gizmos.line_2d(Vec2::new(left, bottom), Vec2::new(left, top), Color::WHITE);
@@ -42,13 +50,19 @@ fn draw_graph(mut gizmos: Gizmos, data: Res<DataHistory>) {
     // --- 2. Daten zeichnen (Grün) ---
     if data.v.is_empty() { return; }
 
-    let count = data.v.len();
+
+    let keys: Vec<_> = data.v.keys().cloned().collect();
+    let values = data.v[&keys[0]].iter().filter_map(| str_value| str_value.parse::<f32>().ok() ).collect::<Vec<_>>();
+    let count = values.len();
     let step_x = (right - left) / (count as f32 - 1.0);
+
+    let max = values.iter().max_by(| a, b | a.total_cmp(b)).expect("No max?").clone();
 
     // Wir iterieren durch die Punkte und zeichnen eine Linie zum jeweils nächsten Punkt
     for i in 0..count - 1 {
-        let val_current = data.v[i];
-        let val_next = data.v[i + 1];
+
+        let val_current = values[i];
+        let val_next = values[i + 1];
 
         // Mapping: Wert (-1.0 bis 1.0) auf Pixelhöhe (bottom bis top) umrechnen
         // Formel: pos = bottom + (wert - min) / (max - min) * hoehe
@@ -69,7 +83,7 @@ fn draw_graph(mut gizmos: Gizmos, data: Res<DataHistory>) {
 
 fn update_values(mut commands: Commands, mut hist: ResMut<DataHistory>, mut msg_receiver: MessageReader<SensorEvent>, mut query: Query<&mut Text, With<FlowSenseValues>>) {
     for sensor_event in msg_receiver.read() {
-        if sensor_event.sensor_name.eq(FLOW_SPEED_NAME) {
+        if !sensor_event.sensor_name.eq(FLOW_SPEED_NAME) {
             return;
         } 
         let v = sensor_event.sensor_value.clone();
@@ -77,6 +91,7 @@ fn update_values(mut commands: Commands, mut hist: ResMut<DataHistory>, mut msg_
         for mut text in &mut query {
             text.0 = v.clone();
             hist.max.entry(sensor_event.sensor_name.clone()).and_modify(|v| *v = v.trim().to_string()).or_insert(v.clone());
+            hist.v.entry(sensor_event.sensor_name.clone()).and_modify(|vec| vec.push(v.trim().to_string())).or_insert(vec![v.clone()]);
         }
     }
 }
@@ -85,7 +100,10 @@ fn init_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     // commands.spawn((TextBundle::from_section()));
     println!("init ui");
     let default_font = asset_server.load("fonts/SpaceMono-Regular.ttf");
-    commands.spawn((
+    (commands).spawn(Node {
+        width: percent(100),
+        ..default()
+    }).with_child((
         Text::new(FLOW_SENS_TITLE),
         TextFont {
             font: default_font.clone(),
@@ -101,9 +119,7 @@ fn init_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         FlowSenseText,
-    ));
-
-    commands.spawn((
+    )).with_child((
         Text::new(format!("{:2}", 0.00)),
         TextFont {
             font: default_font,
@@ -124,6 +140,7 @@ fn init_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 impl Plugin for QuadroUiPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<DataHistory>().add_systems(Startup, init_ui).add_systems(Update, update_values);
+        app.init_gizmo_group::<QuadroGizmoConfig>();
+        app.init_resource::<DataHistory>().add_systems(Startup, init_ui).add_systems(Update, (update_values, draw_graphs));
     }
 }

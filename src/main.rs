@@ -1,12 +1,14 @@
 mod app_plugin;
 mod sensors_plugin;
 mod ui_plugin;
+mod consts;
 
 use bevy::app::App;
 use bevy::DefaultPlugins;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use crate::app_plugin::AppPlugin;
+
 
 fn main() {
     App::new().add_plugins(DefaultPlugins.set(WindowPlugin {

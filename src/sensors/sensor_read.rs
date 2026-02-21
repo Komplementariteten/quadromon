@@ -1,4 +1,4 @@
-use crate::sensors_plugin::{Config, Module, SensorConfig};
+use crate::sensors::{Config, Module, SensorConfig};
 use regex::{Regex, RegexBuilder};
 use std::fs;
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ impl ReadResult {
         format!("{:x?}", self._bytes.clone()).trim().to_string()
     }
 }
-fn check_module(config: &Module, base_dir: &PathBuf) -> bevy::prelude::Result<(), String> {
+fn check_module(config: &Module, base_dir: &PathBuf) -> Result<(), String> {
     if !base_dir.exists() {
         return Err(format!("{:?} does not exist", base_dir));
     }
@@ -50,7 +50,7 @@ fn check_sensor(
     config: &SensorConfig,
     base_path: &PathBuf,
     re: &Regex,
-) -> bevy::prelude::Result<(), String> {
+) -> Result<(), String> {
     if let None = re.captures(config.file.to_str().unwrap()) {
         return Err(format!(
             "{:?} sensor file does not have the expected format abc123_input",
@@ -111,7 +111,7 @@ pub(crate) fn read(config: &Config) -> Vec<ReadResult> {
     results
 }
 
-fn find_module(config: &Module) -> bevy::prelude::Result<PathBuf, String> {
+fn find_module(config: &Module) ->Result<PathBuf, String> {
     let rd = fs::read_dir(HWMON_CLASS_PATH).expect("HWMON Class Dir not found");
     for entry in rd {
         let class_path = entry.unwrap().path();

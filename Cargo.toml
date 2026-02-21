@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = "0.17.3"
 serde = { version = "1.0", features = ["derive"] }
 regex = "1.12.2"
 serde_json = "1.0"
-bevy-inspector-egui = { version = "0.36.0", optional = true}
+vello = "0.7.0"
+winit = "0.30.12"
+pollster = "0.4.0"
+anyhow = "1.0.101"

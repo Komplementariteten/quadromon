@@ -1,9 +1,9 @@
 mod config;
 mod sensor_read;
 
-use bevy::prelude::*;
 use std::path::PathBuf;
-use crate::sensors_plugin::sensor_read::ReadResult;
+use crate::sensors::sensor_read::ReadResult;
+use crate::ui::EventDrivenPlugin;
 
 pub const FLOW_SPEED_NAME: &str = "Flow speed [dL/h]";
 pub const TEMP_SENSOR_NAME: &str = "Sensor 1";
@@ -12,8 +12,17 @@ const QUADRO_MODULE: &str = "quadro";
 
 const MAINBOARD_MODULE: &str = "nct6687";
 
-pub struct SensorPlugin;
-#[derive(Message, Debug)]
+pub(crate) struct SensorHandle {
+}
+
+impl EventDrivenPlugin for SensorHandle {
+    fn event_tick(&mut self) -> anyhow::Result<()>
+    {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
 pub struct SensorEvent{
     pub sensor_name: String,
     pub sensor_value: String
@@ -30,10 +39,7 @@ impl From<ReadResult> for SensorEvent{
     }
 }
 
-#[derive(Resource, Deref, DerefMut)]
-struct SensorTimer(pub Timer);
-
-#[derive(Resource, Deref, DerefMut)]
+#[derive(Debug)]
 pub struct Config {
     pub modules: Vec<Module>,
 }
@@ -68,12 +74,6 @@ impl Module {
     }
 }
 
-impl Default for SensorTimer {
-    fn default() -> Self {
-        Self(Timer::from_seconds(4.0, TimerMode::Repeating))
-    }
-}
-
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -94,7 +94,7 @@ impl Default for Config {
     }
 }
 
-fn sensor_event(
+/* fn sensor_event(
     time: Res<Time>,
     mut state: ResMut<SensorTimer>,
     config: Res<Config>,
@@ -117,3 +117,4 @@ impl Plugin for SensorPlugin {
             .add_systems(Update, sensor_event);
     }
 }
+*/

@@ -1,32 +1,15 @@
-use crate::sensors::{Config, Module, SensorConfig};
+use crate::sensors::{Config, Module, ResultWrapper, SensorConfig, SensorType};
+use glob::{glob_with, MatchOptions};
 use regex::{Regex, RegexBuilder};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
-const REGEX_STR: &str = r"^(?<sensor>[\w\d]{2,})\_(?<input>input+)$";
+const REGEX_STR: &str = r"\S+/(?<sensor>[\w\d]{2,})\_(?<label>label+)$";
 pub(crate) const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
 
-#[derive(Debug)]
-pub(crate) struct ReadResult {
-    _bytes: Vec<u8>,
-    pub name: String,
-}
 
-impl ReadResult {
-    pub fn new(name: &str, bytes: Vec<u8>) -> ReadResult {
-        ReadResult {
-            _bytes: bytes,
-            name: name.to_string(),
-        }
-    }
-    
-    pub fn get_value(&self) -> String {
-        if let Ok(s) = String::from_utf8(self._bytes.clone()) {
-            return s.trim().to_string();
-        }
-        format!("{:x?}", self._bytes.clone()).trim().to_string()
-    }
-}
+
 fn check_module(config: &Module, base_dir: &PathBuf) -> Result<(), String> {
     if !base_dir.exists() {
         return Err(format!("{:?} does not exist", base_dir));
@@ -46,62 +29,70 @@ fn check_module(config: &Module, base_dir: &PathBuf) -> Result<(), String> {
     Err(format!("{:?} could not be read", name_file))
 }
 
-fn check_sensor(
-    config: &SensorConfig,
-    base_path: &PathBuf,
-    re: &Regex,
-) -> Result<(), String> {
-    if let None = re.captures(config.file.to_str().unwrap()) {
-        return Err(format!(
-            "{:?} sensor file does not have the expected format abc123_input",
-            config.file
-        ));
-    }
+fn label_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        RegexBuilder::new(REGEX_STR)
+            .case_insensitive(true)
+            .multi_line(false)
+            .unicode(true)
+            .build()
+            .expect("Invalid regex")
+    })
+}
 
-    if !&base_path.join(&config.file).exists() {
-        return Err(format!("{:?} does not exist", base_path.join(&config.file)));
-    }
+fn check_sensor(config: &SensorConfig, base_path: &str) -> Result<String, String> {
+    let re: &Regex = label_regex();
+    let glob_opt = MatchOptions {
+        case_sensitive: false,
+        ..Default::default()
+    };
 
-    let labele_file_name = re
-        .replace_all(config.file.to_str().unwrap(), "${sensor}_label")
-        .to_string();
-    let label_file = base_path.join(labele_file_name);
-    if !label_file.exists() {
-        return Err(format!("{:?} does not exist", label_file));
-    }
-    if let Ok(found_label) = fs::read_to_string(&label_file) {
-        return match found_label.trim() == config.name {
-            true => Ok(()),
-            false => Err(format!("found wrong sensor name {:?}", found_label)),
-        };
-    }
+    let glob_path = format!("{}/*_label", base_path);
 
+    for entry in glob_with(glob_path.as_str(), glob_opt).expect("Failed to read glob pattern") {
+        if let Ok(path) = &entry {
+            let name = fs::read_to_string(path).expect("failed to read file");
+            if name.trim() == config.name {
+                if let Some(caps) = re.captures(&entry.unwrap().to_str().unwrap())
+                    && let Some(match_name) = caps.name("sensor")
+                {
+                    return Ok(match_name.as_str().to_string());
+                }
+            }
+        }
+    }
     Err(format!("{:?} could not be read", config))
 }
 
-fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ReadResult> {
-    let sensor_file = base_path.join(&config.file);
-    if let Ok(file_content) = fs::read(&sensor_file) {
-        return Some(ReadResult::new(&config.name, file_content));
+fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ResultWrapper> {
+    if let Ok(s_name) = check_sensor(config, base_path.to_str().unwrap()) {
+        let files = config.related_files(&PathBuf::from(base_path), s_name.as_str());
+        let mut results = vec![];
+        for file in files {
+            if let Ok(file_content) = fs::read(&file) {
+                results.push(file_content);
+            }
+        }
+
+        if results.len() == 0 {
+            return None;
+        }
+        return Some(ResultWrapper::new(
+            config.name.as_str(),
+            results,
+            config.s_type.clone(),
+        ));
     }
+
     None
 }
 
-pub(crate) fn read(config: &Config) -> Vec<ReadResult> {
-    let lable_re = RegexBuilder::new(REGEX_STR)
-        .case_insensitive(true)
-        .multi_line(false)
-        .unicode(true)
-        .build()
-        .expect("Invalid regex");
-
+pub(crate) fn read(config: &Config) -> Vec<ResultWrapper> {
     let mut results = vec![];
     for module in &config.modules {
         if let Ok(mod_path) = find_module(module) {
             for sensor in &module.sensors {
-                if let Err(e_str) = check_sensor(sensor, &mod_path, &lable_re) {
-                    panic!("{}", e_str)
-                }
                 if let Some(result) = read_sensor(sensor, &mod_path) {
                     results.push(result)
                 }
@@ -111,7 +102,7 @@ pub(crate) fn read(config: &Config) -> Vec<ReadResult> {
     results
 }
 
-fn find_module(config: &Module) ->Result<PathBuf, String> {
+fn find_module(config: &Module) -> Result<PathBuf, String> {
     let rd = fs::read_dir(HWMON_CLASS_PATH).expect("HWMON Class Dir not found");
     for entry in rd {
         let class_path = entry.unwrap().path();
@@ -123,4 +114,38 @@ fn find_module(config: &Module) ->Result<PathBuf, String> {
         }
     }
     Err(format!("Module: {:?} not found", config.module_name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_read() {
+        let config = Config::default();
+        let r = read(&config);
+        assert!(!r.is_empty());
+    }
+    
+    #[test]
+    fn test_find_module() {
+        let default = Config::default();
+        let first_module = default.modules[0].clone();
+        let r = find_module(&first_module);
+        assert!(r.is_ok());
+    }
+    
+    #[test]
+    fn test_check_sensor() {
+        let cfg = SensorConfig::new("Flow speed [dL/h]", SensorType::FlowSpeed);
+        let r = check_sensor(&cfg, "/sys/class/hwmon/hwmon6");
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_read_sensor() {
+        let cfg = SensorConfig::new("Flow speed [dL/h]", SensorType::FlowSpeed);
+        let r = read_sensor(&cfg, &PathBuf::from("/sys/class/hwmon/hwmon6"));
+        assert!(r.is_some());
+    }
 }

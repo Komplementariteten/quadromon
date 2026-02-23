@@ -1,9 +1,7 @@
 mod config;
-mod sensor_read;
+pub(crate) mod sensor_read;
 
 use std::path::PathBuf;
-use crate::sensors::sensor_read::ReadResult;
-use crate::ui::EventDrivenPlugin;
 
 pub const FLOW_SPEED_NAME: &str = "Flow speed [dL/h]";
 pub const TEMP_SENSOR_NAME: &str = "Sensor 1";
@@ -12,56 +10,107 @@ const QUADRO_MODULE: &str = "quadro";
 
 const MAINBOARD_MODULE: &str = "nct6687";
 
-pub(crate) struct SensorHandle {
-}
-
-impl EventDrivenPlugin for SensorHandle {
-    fn event_tick(&mut self) -> anyhow::Result<()>
-    {
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-pub struct SensorEvent{
-    pub sensor_name: String,
-    pub sensor_value: String
-}
-
-impl From<ReadResult> for SensorEvent{
-    fn from(r: ReadResult) -> Self {
-        let value = r.get_value();
-        println!("Sensor value: {}:{}", &r.name, &value);
-        SensorEvent{
-            sensor_name: r.name,
-            sensor_value: value
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub modules: Vec<Module>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Module {
     pub module_name: String,
     pub sensors: Vec<SensorConfig>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub(crate) enum SensorType {
+    Temperature,
+    InputVoltage,
+    FanSpeed,
+    Pwm,
+    FlowSpeed,
+    Unknown,
+}
+
+#[derive(Debug, Clone)]
 pub struct SensorConfig {
     pub name: String,
-    pub file: PathBuf,
+    pub s_type: SensorType,
+}
+
+#[derive(Debug)]
+pub(crate) struct ResultWrapper {
+    _bytes: Vec<Vec<u8>>,
+    pub name: String,
+    _t: SensorType,
+}
+
+impl ResultWrapper {
+    pub fn new(name: &str, bytes: Vec<Vec<u8>>, t: SensorType) -> ResultWrapper {
+        ResultWrapper {
+            _bytes: bytes,
+            name: name.to_string(),
+            _t: t,
+        }
+    }
+    pub fn format(&self) -> ReadResult {
+        match self._t {
+            SensorType::Temperature => {
+                let bytes: [u8; 4] = self._bytes[0][0..4].try_into().expect("Failed to read bytes");
+                ReadResult::Temperature(self.name.clone(), i32::from_le_bytes(bytes))
+            },
+            SensorType::FlowSpeed => {
+                let in_bytes: [u8; 4] = self._bytes[0][0..4].try_into().expect("Failed to read bytes");
+                let pulse_bytes: [u8; 4] = self._bytes[1][0..4].try_into().expect("Failed to read bytes");
+                ReadResult::FlowSpeed(self.name.clone(), i32::from_le_bytes(in_bytes), i32::from_le_bytes(pulse_bytes))
+            }
+            _ => ReadResult::None,
+        }
+    }
+}
+
+pub enum ReadResult {
+    Temperature(String, i32),
+    InputVoltage(String, i32),
+    FanSpeed(String, i32),
+    Pwm(String, i32, i32),
+    FlowSpeed(String, i32, i32),
+    None,
 }
 
 impl SensorConfig {
-    fn new(name: &str, file: &str) -> SensorConfig {
+    fn new(name: &str, t: SensorType) -> SensorConfig {
         SensorConfig {
             name: name.to_string(),
-            file: PathBuf::from(file),
+            s_type: t,
         }
+    }
+
+    fn related_files(&self, base_path: &PathBuf, mod_file: &str) -> Vec<PathBuf> {
+        let mut related_files = vec![];
+        match self.s_type {
+            SensorType::FlowSpeed => {
+                let input = base_path.join(format!("{}_input", mod_file));
+                let pulses = base_path.join(format!("{}_pulses", mod_file));
+                related_files.push(input);
+                related_files.push(pulses);
+            }
+            SensorType::FanSpeed => {
+                let input = base_path.join(format!("{}_input", mod_file));
+                related_files.push(input);
+            }
+            SensorType::Pwm => {
+                let input = base_path.join(format!("{}_input", mod_file));
+                related_files.push(input);
+            }
+            SensorType::Temperature => {
+                let input = base_path.join(format!("{}_input", mod_file));
+                related_files.push(input);
+                let offset = base_path.join(format!("{}_offset", mod_file));
+                related_files.push(offset);
+            }
+            _ => {}
+        };
+        related_files
     }
 }
 
@@ -81,40 +130,15 @@ impl Default for Config {
                 Module::new(
                     QUADRO_MODULE,
                     vec![
-                        SensorConfig::new(FLOW_SPEED_NAME, "fan5_input"),
-                        SensorConfig::new(TEMP_SENSOR_NAME, "temp1_input"),
+                        SensorConfig::new(FLOW_SPEED_NAME, SensorType::FlowSpeed),
+                        SensorConfig::new(TEMP_SENSOR_NAME, SensorType::Temperature),
                     ],
                 ),
                 Module::new(
                     MAINBOARD_MODULE,
-                    vec![SensorConfig::new(PUMP_SPEED_NAME, "fan2_input")],
+                    vec![SensorConfig::new(PUMP_SPEED_NAME, SensorType::FanSpeed)],
                 ),
             ],
         }
     }
 }
-
-/* fn sensor_event(
-    time: Res<Time>,
-    mut state: ResMut<SensorTimer>,
-    config: Res<Config>,
-    mut sensor_ev: MessageWriter<SensorEvent>,
-) {
-    if state.tick(time.delta()).is_finished() {
-        println!("Read Sensor");
-        let rs = sensor_read::read(&config);
-        for result in rs {
-            sensor_ev.write(SensorEvent::from(result));
-        }
-    }
-}
-
-impl Plugin for SensorPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<SensorTimer>()
-            .init_resource::<Config>()
-            .add_message::<SensorEvent>()
-            .add_systems(Update, sensor_event);
-    }
-}
-*/

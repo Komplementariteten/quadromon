@@ -1,11 +1,11 @@
-use crate::sensors::SensorHandle;
-use crate::ui::EventDrivenPlugin;
+use crate::ui::sensor_handle::SensorHandle;
 
 mod sensors;
 mod consts;
 mod ui;
+mod proc;
 
 fn main() {
-    let plugins = vec![SensorHandle { }];
+    let plugins = vec![SensorHandle::new()];
     ui::run(plugins).expect("Failed to run UI");
 }

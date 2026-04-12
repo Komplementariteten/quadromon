@@ -8,8 +8,6 @@ use std::sync::OnceLock;
 const REGEX_STR: &str = r"\S+/(?<sensor>[\w\d]{2,})\_(?<label>label+)$";
 pub(crate) const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
 
-
-
 fn check_module(config: &Module, base_dir: &PathBuf) -> Result<(), String> {
     if !base_dir.exists() {
         return Err(format!("{:?} does not exist", base_dir));
@@ -88,14 +86,12 @@ fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ResultWrapp
     None
 }
 
-pub(crate) fn read(config: &Config) -> Vec<ResultWrapper> {
+pub(crate) fn read(module: &Module) -> Vec<ResultWrapper> {
     let mut results = vec![];
-    for module in &config.modules {
-        if let Ok(mod_path) = find_module(module) {
-            for sensor in &module.sensors {
-                if let Some(result) = read_sensor(sensor, &mod_path) {
-                    results.push(result)
-                }
+    if let Ok(mod_path) = find_module(module) {
+        for sensor in &module.sensors {
+            if let Some(result) = read_sensor(sensor, &mod_path) {
+                results.push(result)
             }
         }
     }
@@ -119,14 +115,14 @@ fn find_module(config: &Module) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_read() {
-        let config = Config::default();
+        let config = Module::default();
         let r = read(&config);
         assert!(!r.is_empty());
     }
-    
+
     #[test]
     fn test_find_module() {
         let default = Config::default();
@@ -134,7 +130,7 @@ mod tests {
         let r = find_module(&first_module);
         assert!(r.is_ok());
     }
-    
+
     #[test]
     fn test_check_sensor() {
         let cfg = SensorConfig::new("Flow speed [dL/h]", SensorType::FlowSpeed);

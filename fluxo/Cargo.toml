@@ -1,0 +1,10 @@
+[package]
+name = "fluxo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+vello = {workspace = true}
+skrifa = "0.42.0"

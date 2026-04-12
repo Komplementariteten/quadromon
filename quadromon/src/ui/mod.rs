@@ -1,16 +1,17 @@
 use crate::ui::app::QuadromonApp;
 use anyhow::Result;
 use winit::event_loop::EventLoop;
-use crate::ui::components::Component;
+use fluxo::components::Component;
 
 mod app;
-mod components;
 pub(crate) mod sensor_handle;
 
 pub(crate) trait EventDrivenPlugin {
+    type Component: Component;
+    
     fn event_tick(&mut self) -> anyhow::Result<()>;
     
-    fn get_component(&self) -> Option<Component>;
+    fn get_component(&self) -> Option<&Self::Component>;
 }
 
 pub fn run<Plugin: EventDrivenPlugin>(plugins: Vec<Plugin>) -> Result<()> {

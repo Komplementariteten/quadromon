@@ -1,0 +1,12 @@
+[package]
+name = "text"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = {workspace = true}
+winit = { workspace = true }
+wgpu = "29.0.1"
+pollster = { workspace = true }
+vello = {workspace = true}
+fluxo = {path = "../../fluxo"}

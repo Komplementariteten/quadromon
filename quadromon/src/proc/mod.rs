@@ -81,6 +81,12 @@ impl Value {
     }
 }
 
+impl Into<f64> for &Value {
+    fn into(self) -> f64 {
+        self.value as f64
+    }
+}
+
 pub(crate) struct Processing {
     hist_file: PathBuf,
     last: Vec<Value>,
@@ -101,9 +107,10 @@ impl Processing {
     }
     pub(crate) fn init(results: Vec<ResultWrapper>, hist_file: Option<PathBuf>) -> Processing {
         let mut values = vec![];
-        for result in results {
+        // ToDo: this crashes
+        /* for result in results {
             values.push(Value::new(result, ""));
-        }
+        }  */
 
         let eff_hist = match hist_file {
             Some(h) => h,

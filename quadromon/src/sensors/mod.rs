@@ -123,6 +123,13 @@ impl Module {
     }
 }
 
+impl Default for Module {
+    fn default() -> Self {
+        Module::new("default", Vec::new())
+    }
+}
+
+
 impl Default for Config {
     fn default() -> Self {
         Self {

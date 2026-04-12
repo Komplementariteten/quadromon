@@ -1,4 +1,4 @@
-use crate::ui::components::add_components;
+use fluxo::components::Component;
 use std::sync::Arc;
 use vello::peniko::color::palette;
 use vello::util::{RenderContext, RenderSurface};
@@ -94,16 +94,17 @@ impl<Plugins: EventDrivenPlugin> ApplicationHandler for QuadromonApp<Plugins> {
 
                 self.scene.reset();
 
-                for plugin in self.plugins.iter_mut() {
-                    plugin.event_tick().expect("Failed to tick plugin");
-                }
-
-                // Add UI Elements
-                add_components(&mut self.scene);
-
                 // Get the window size
                 let width = surface.config.width;
                 let height = surface.config.height;
+
+                let mut component_offset: u32 = 0;
+                for plugin in self.plugins.iter_mut() {
+                    plugin.event_tick().expect("Failed to tick plugin");
+                    if let Some(component) = plugin.get_component() {
+                        component_offset += component.render(&mut self.scene, component_offset, width);
+                    }
+                }
 
                 // Get a handle to the device
                 let device_handle = &self.context.devices[surface.dev_id];

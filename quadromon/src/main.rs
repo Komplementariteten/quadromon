@@ -2,7 +2,7 @@ use crate::ui::sensor_handle::SensorHandle;
 
 mod sensors;
 mod consts;
-mod ui;
+pub mod ui;
 mod proc;
 
 fn main() {

@@ -1,12 +1,11 @@
 use std::time::{Duration, Instant};
 use vello::Scene;
-use vello::wgpu::Surface;
+use vello::wgpu::naga::Module;
 use fluxo::chart_component::render_chart;
-use crate::proc::{Processing, Value};
-use crate::sensors::{Config, Module, ResultWrapper};
 use fluxo::components::{Component, ComponentType};
-use crate::ui::EventDrivenPlugin;
+use quadromon::ui::EventDrivenPlugin;
 
+/* 
 pub(crate) struct SensorHandle {
     cfg: Module,
     last_tick_call: Instant,
@@ -75,7 +74,7 @@ impl EventDrivenPlugin for SensorHandle {
         let elapsed = now - self.last_tick_call;
         if elapsed > self.update_duration {
             self.last_tick_call = now;
-            let results = crate::sensors::sensor_read::read(&self.cfg.clone());
+            let results = sensor_read::read(&self.cfg.clone());
             self.process(results);
         }
         Ok(())
@@ -86,3 +85,4 @@ impl EventDrivenPlugin for SensorHandle {
     }
 }
 
+*/

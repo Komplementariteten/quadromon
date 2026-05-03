@@ -11,6 +11,8 @@
       <sourceFolder url="file://$MODULE_DIR$/examples/text/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/fluxo/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/quadromon/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cargosrv/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/quadrosrv/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

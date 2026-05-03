@@ -8,9 +8,9 @@ pub(crate) mod sensor_handle;
 
 pub(crate) trait EventDrivenPlugin {
     type Component: Component;
-    
+
     fn event_tick(&mut self) -> anyhow::Result<()>;
-    
+
     fn get_component(&self) -> Option<&Self::Component>;
 }
 

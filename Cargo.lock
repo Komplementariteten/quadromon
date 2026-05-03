@@ -1750,6 +1750,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "quadrosrv"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "glob",
+ "postcard",
+ "regex",
+ "serde",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.39.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

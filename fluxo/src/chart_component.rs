@@ -5,7 +5,7 @@ use vello::{Glyph, Scene};
 use crate::components::Component;
 use crate::{DEFAULT_MARGIN, DEFAULT_RECT_RADIUS, DEFAULT_STROKE_WIDTH};
 use crate::axis::render_axis;
-use crate::text_render::{render_text_normal, render_text_small};
+use crate::text_render::{render_text_normal, render_text_small, render_text_small_color, Alignment};
 
 const CHART_HEIGHT: u32 = 100;
 
@@ -14,16 +14,19 @@ const BAR_WIDTH: usize = 4;
 
 const NUMBER_OFF_BARS: u32 = 20;
 
+static COLOR_BLUE: Color = Color::new([0.2078, 0.5647, 0.8461, 0.8]);
+static COLOR_RED: Color = Color::new([0.75, 0.15, 0.15, 0.7]);
+
 pub fn render_chart(scene: &mut Scene, title: &str, values: Vec<f64>, offset: u32, width: u32) -> u32 {
     let axis_pos = render_axis(scene, None, offset as f64, width, CHART_HEIGHT);
     let max_value = values.iter().max_by(|a, b| a.total_cmp(b)).unwrap().clone();
-    plot(scene, values.clone(), max_value, offset, width, axis_pos, CHART_HEIGHT);
+    add_plot(scene, values.clone(), max_value, offset, width, axis_pos, CHART_HEIGHT);
     add_title(scene, title, offset as f64 + (2. * DEFAULT_MARGIN) + DEFAULT_STROKE_WIDTH);
     add_border(scene, offset as f64, width as f64, CHART_HEIGHT as f64);
     let max_value_s = format!("{:.4}", max_value);
     let max_v_offset_y = offset as f64 + (4. * DEFAULT_MARGIN);
-    let max_v_offset_x = (width as f64) * 0.5;
-    render_text_small(scene, max_value_s.as_str(), max_v_offset_x, max_v_offset_y);
+    let max_v_offset_x = (width as f64) - (4. * DEFAULT_MARGIN);
+    render_text_small_color(scene, max_value_s.as_str(), Alignment::Right, max_v_offset_x, max_v_offset_y, Color::WHITE);
     return CHART_HEIGHT;
 }
 
@@ -45,9 +48,9 @@ fn add_border(scene: &mut Scene, offset: f64, width: f64, height: f64) {
     scene.stroke(&stroke, Affine::IDENTITY, border_color, None, &rect)
 }
 
-fn plot(scene: &mut Scene, values: Vec<f64>, max_value: f64, offset: u32, width: u32, height: u32, axis_pos: u32) {
+fn add_plot(scene: &mut Scene, values: Vec<f64>, max_value: f64, offset: u32, width: u32, height: u32, axis_pos: u32) {
     let mut  bar_values = vec![];
-    let bar_y_pos = axis_pos - DEFAULT_MARGIN as u32;
+    let bar_y_pos = axis_pos - (4. * DEFAULT_MARGIN) as u32;
     let top_margin = offset as f64 + (6. * DEFAULT_MARGIN);
     let left_margin = 3. * DEFAULT_MARGIN;
     if values.len() < NUMBER_OFF_BARS as usize {
@@ -75,7 +78,7 @@ fn plot(scene: &mut Scene, values: Vec<f64>, max_value: f64, offset: u32, width:
         }
     }
 
-    let rect_color = Color::new([0.75, 0.15, 0.15, 0.7]);
+    let rect_color = COLOR_BLUE;
 
     for i in 0..bar_values.len() {
         let rect = Rect::new(left_margin + (i * BAR_WIDTH) as f64, bar_values[i as usize],  left_margin + ((i + 1) * BAR_WIDTH) as f64, bar_y_pos as f64 );

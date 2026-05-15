@@ -1,12 +1,12 @@
-use crate::sensors::{Config, Module, ResultWrapper, SensorConfig, SensorType};
 use glob::{glob_with, MatchOptions};
 use regex::{Regex, RegexBuilder};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use crate::sensors::{Module, ResultWrapper, SensorConfig};
 
 const REGEX_STR: &str = r"\S+/(?<sensor>[\w\d]{2,})\_(?<label>label+)$";
-pub(crate) const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
+pub const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
 
 fn check_module(config: &Module, base_dir: &PathBuf) -> Result<(), String> {
     if !base_dir.exists() {
@@ -52,6 +52,7 @@ fn check_sensor(config: &SensorConfig, base_path: &str) -> Result<String, String
         if let Ok(path) = &entry {
             let name = fs::read_to_string(path).expect("failed to read file");
             if name.trim() == config.name {
+                println!("Found match {:?}", path);
                 if let Some(caps) = re.captures(&entry.unwrap().to_str().unwrap())
                     && let Some(match_name) = caps.name("sensor")
                 {
@@ -68,7 +69,8 @@ fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ResultWrapp
         let files = config.related_files(&PathBuf::from(base_path), s_name.as_str());
         let mut results = vec![];
         for file in files {
-            if let Ok(file_content) = fs::read(&file) {
+            if let Ok(file_content) = fs::read_to_string(&file) {
+                println!("Reading related file file {:?} with {:?}", file, file_content);
                 results.push(file_content);
             }
         }
@@ -86,7 +88,7 @@ fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ResultWrapp
     None
 }
 
-pub(crate) fn read(module: &Module) -> Vec<ResultWrapper> {
+pub fn read(module: &Module) -> Vec<ResultWrapper> {
     let mut results = vec![];
     if let Ok(mod_path) = find_module(module) {
         for sensor in &module.sensors {
@@ -114,6 +116,7 @@ fn find_module(config: &Module) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
+    use crate::sensors::{Config, SensorType};
     use super::*;
 
     #[test]

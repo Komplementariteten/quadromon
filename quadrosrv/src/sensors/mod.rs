@@ -1,7 +1,8 @@
 mod config;
-pub(crate) mod sensor_read;
+pub mod sensor_read;
 
 use std::path::PathBuf;
+use crate::proc::Processing;
 
 pub const FLOW_SPEED_NAME: &str = "Flow speed [dL/h]";
 pub const TEMP_SENSOR_NAME: &str = "Sensor 1";
@@ -19,10 +20,11 @@ pub struct Config {
 pub struct Module {
     pub module_name: String,
     pub sensors: Vec<SensorConfig>,
+    p: Option<Processing>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum SensorType {
+pub enum SensorType {
     Temperature,
     InputVoltage,
     FanSpeed,
@@ -37,17 +39,17 @@ pub struct SensorConfig {
     pub s_type: SensorType,
 }
 
-#[derive(Debug)]
-pub(crate) struct ResultWrapper {
-    _bytes: Vec<Vec<u8>>,
+#[derive(Debug, Clone)]
+pub struct ResultWrapper {
+    _values: Vec<String>,
     pub name: String,
     _t: SensorType,
 }
 
 impl ResultWrapper {
-    pub fn new(name: &str, bytes: Vec<Vec<u8>>, t: SensorType) -> ResultWrapper {
+    pub fn new(name: &str, bytes: Vec<String>, t: SensorType) -> ResultWrapper {
         ResultWrapper {
-            _bytes: bytes,
+            _values: bytes,
             name: name.to_string(),
             _t: t,
         }
@@ -55,13 +57,16 @@ impl ResultWrapper {
     pub fn format(&self) -> ReadResult {
         match self._t {
             SensorType::Temperature => {
-                let bytes: [u8; 4] = self._bytes[0][0..4].try_into().expect("Failed to read bytes");
-                ReadResult::Temperature(self.name.clone(), i32::from_le_bytes(bytes))
+                // let bytes: [u8; 4] = self._values[0][0..4].try_into().expect("Failed to read bytes");
+                let int_value = self._values[0].trim().parse::<i32>().expect("not a number");
+                ReadResult::Temperature(self.name.clone(), int_value)
             },
             SensorType::FlowSpeed => {
-                let in_bytes: [u8; 4] = self._bytes[0][0..4].try_into().expect("Failed to read bytes");
-                let pulse_bytes: [u8; 4] = self._bytes[1][0..4].try_into().expect("Failed to read bytes");
-                ReadResult::FlowSpeed(self.name.clone(), i32::from_le_bytes(in_bytes), i32::from_le_bytes(pulse_bytes))
+                let in_value = self._values[0].trim().parse::<i32>().expect("not a number");
+                let pulse_value = self._values[1].trim().parse::<i32>().expect("not a number");
+                // let in_bytes: [u8; 4] = self._values[0][0..4].try_into().expect("Failed to read bytes");
+                // let pulse_bytes: [u8; 4] = self._values[1][0..4].try_into().expect("Failed to read bytes");
+                ReadResult::FlowSpeed(self.name.clone(), in_value, pulse_value)
             }
             _ => ReadResult::None,
         }
@@ -118,7 +123,17 @@ impl Module {
     fn new(name: &str, sensors: Vec<SensorConfig>) -> Module {
         Module {
             module_name: name.to_string(),
+            p: None,
             sensors,
+        }
+    }
+    
+    pub fn read(&mut self) {
+        let r = sensor_read::read(self);
+        if self.p.is_none() {
+            self.p = Some(Processing::init(r.clone(), None))
+        } else if let Some(p) = self.p.as_mut() {
+            p.update(r);
         }
     }
 }

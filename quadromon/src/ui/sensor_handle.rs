@@ -3,7 +3,7 @@ use vello::Scene;
 use vello::wgpu::naga::Module;
 use fluxo::chart_component::render_chart;
 use fluxo::components::{Component, ComponentType};
-use quadromon::ui::EventDrivenPlugin;
+use crate::ui::EventDrivenPlugin;
 
 /* 
 pub(crate) struct SensorHandle {

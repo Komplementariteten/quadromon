@@ -1,6 +1,7 @@
 use glob::{glob_with, MatchOptions};
 use regex::{Regex, RegexBuilder};
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use crate::sensors::{Module, ResultWrapper, SensorConfig};
@@ -8,23 +9,16 @@ use crate::sensors::{Module, ResultWrapper, SensorConfig};
 const REGEX_STR: &str = r"\S+/(?<sensor>[\w\d]{2,})\_(?<label>label+)$";
 pub const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
 
-fn check_module(config: &Module, base_dir: &PathBuf) -> Result<(), String> {
-    if !base_dir.exists() {
-        return Err(format!("{:?} does not exist", base_dir));
-    }
-
+fn check_module(config: &Module, base_dir: &Path) -> Result<(), String> {
     let name_file = base_dir.join("name");
     if !name_file.exists() {
         return Err(format!("{:?} does not exist", name_file));
     }
-    if let Ok(found_mod_name) = fs::read_to_string(&name_file) {
-        return match found_mod_name.trim() == config.module_name {
-            true => Ok(()),
-            false => Err(format!("found wrong module name {:?}", found_mod_name)),
-        };
+    match fs::read_to_string(&name_file) {
+        Ok(name) if name.trim() == config.module_name => Ok(()),
+        Ok(name) => Err(format!("found wrong module name {:?}", name)),
+        Err(e) => Err(format!("{:?} could not be read: {}", name_file, e)),
     }
-
-    Err(format!("{:?} could not be read", name_file))
 }
 
 fn label_regex() -> &'static Regex {
@@ -50,32 +44,36 @@ fn check_sensor(config: &SensorConfig, base_path: &str) -> Result<String, String
 
     for entry in glob_with(glob_path.as_str(), glob_opt).expect("Failed to read glob pattern") {
         if let Ok(path) = &entry {
-            let name = fs::read_to_string(path).expect("failed to read file");
-            if name.trim() == config.name {
-                println!("Found match {:?}", path);
-                if let Some(caps) = re.captures(&entry.unwrap().to_str().unwrap())
-                    && let Some(match_name) = caps.name("sensor")
-                {
-                    return Ok(match_name.as_str().to_string());
+            match fs::read_to_string(path) {
+                Ok(name) if name.trim() == config.name => {
+                    println!("Found match {:?}", path);
+                    if let Some(caps) = re.captures(&path.to_string_lossy())
+                        && let Some(match_name) = caps.name("sensor")
+                    {
+                        return Ok(match_name.as_str().to_string());
+                    }
                 }
+                Err(e) => eprintln!("failed to read file {:?}: {}", path, e),
+                _ => {}
             }
         }
     }
     Err(format!("{:?} could not be read", config))
 }
 
-fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ResultWrapper> {
-    if let Ok(s_name) = check_sensor(config, base_path.to_str().unwrap()) {
-        let files = config.related_files(&PathBuf::from(base_path), s_name.as_str());
+fn read_sensor(config: &SensorConfig, base_path: &Path) -> Option<ResultWrapper> {
+    if let Ok(s_name) = check_sensor(config, base_path.to_str()?) {
+        let files = config.related_files(base_path, s_name.as_str());
         let mut results = vec![];
         for file in files {
             if let Ok(file_content) = fs::read_to_string(&file) {
-                println!("Reading related file file {:?} with {:?}", file, file_content);
                 results.push(file_content);
+            } else {
+                eprintln!("failed to read related file {:?}", file);
             }
         }
 
-        if results.len() == 0 {
+        if results.is_empty() {
             return None;
         }
         return Some(ResultWrapper::new(
@@ -102,13 +100,9 @@ pub fn read(module: &Module) -> Vec<ResultWrapper> {
 
 fn find_module(config: &Module) -> Result<PathBuf, String> {
     let rd = fs::read_dir(HWMON_CLASS_PATH).expect("HWMON Class Dir not found");
-    for entry in rd {
-        let class_path = entry.unwrap().path();
-        if class_path.is_dir() {
-            match check_module(config, &class_path) {
-                Ok(_) => return Ok(class_path),
-                Err(_) => continue,
-            }
+    for class_path in rd.flatten().map(|e| e.path()) {
+        if class_path.is_dir() && check_module(config, &class_path).is_ok() {
+            return Ok(class_path);
         }
     }
     Err(format!("Module: {:?} not found", config.module_name))

@@ -2,7 +2,7 @@
 
 Small tool to minotor Pump and Flow on Aquacomputer Quadro
 
-# Agend
+# Agent
 
 Initialer Promt:
 Ich werde dir gleich den Kontext meines Projekts geben. Bitte lies diesen genau durch und bestätige mit 'Bereit'. Nutze

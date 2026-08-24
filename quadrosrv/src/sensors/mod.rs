@@ -1,7 +1,6 @@
-mod config;
 pub mod sensor_read;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use crate::proc::Processing;
 
 pub const FLOW_SPEED_NAME: &str = "Flow speed [dL/h]";
@@ -57,16 +56,21 @@ impl ResultWrapper {
     pub fn format(&self) -> ReadResult {
         match self._t {
             SensorType::Temperature => {
-                // let bytes: [u8; 4] = self._values[0][0..4].try_into().expect("Failed to read bytes");
                 let int_value = self._values[0].trim().parse::<i32>().expect("not a number");
                 ReadResult::Temperature(self.name.clone(), int_value)
             },
             SensorType::FlowSpeed => {
                 let in_value = self._values[0].trim().parse::<i32>().expect("not a number");
                 let pulse_value = self._values[1].trim().parse::<i32>().expect("not a number");
-                // let in_bytes: [u8; 4] = self._values[0][0..4].try_into().expect("Failed to read bytes");
-                // let pulse_bytes: [u8; 4] = self._values[1][0..4].try_into().expect("Failed to read bytes");
                 ReadResult::FlowSpeed(self.name.clone(), in_value, pulse_value)
+            }
+            SensorType::FanSpeed => {
+                let fan_value = self._values[0].trim().parse::<i32>().expect("not a number");
+                ReadResult::FanSpeed(self.name.clone(), fan_value)
+            }
+            SensorType::Pwm => {
+                let v1 = self._values[0].trim().parse::<i32>().expect("not a number");
+                ReadResult::Pwm(self.name.clone(), v1, 0)
             }
             _ => ReadResult::None,
         }
@@ -90,26 +94,14 @@ impl SensorConfig {
         }
     }
 
-    fn related_files(&self, base_path: &PathBuf, mod_file: &str) -> Vec<PathBuf> {
-        let mut related_files = vec![];
+    fn related_files(&self, base_path: &Path, mod_file: &str) -> Vec<PathBuf> {
+        let mut related_files = vec![base_path.join(format!("{}_input", mod_file))];
         match self.s_type {
             SensorType::FlowSpeed => {
-                let input = base_path.join(format!("{}_input", mod_file));
                 let pulses = base_path.join(format!("{}_pulses", mod_file));
-                related_files.push(input);
                 related_files.push(pulses);
             }
-            SensorType::FanSpeed => {
-                let input = base_path.join(format!("{}_input", mod_file));
-                related_files.push(input);
-            }
-            SensorType::Pwm => {
-                let input = base_path.join(format!("{}_input", mod_file));
-                related_files.push(input);
-            }
             SensorType::Temperature => {
-                let input = base_path.join(format!("{}_input", mod_file));
-                related_files.push(input);
                 let offset = base_path.join(format!("{}_offset", mod_file));
                 related_files.push(offset);
             }

@@ -96,28 +96,6 @@ impl SensorServer {
                     }
                 }
 
-                // Versuche, vom Socket zu lesen (nicht-blockierend)
-                // Dies dient dazu, Client-Trennungen zu erkennen oder eingehende Daten zu verarbeiten.
-                /* read_buff.clear(); // Puffer vor dem Lesen leeren
-                match socket.read_to_end(&mut read_buff) { // read_to_end auf nicht-blockierendem Socket gibt sofort zurück
-                    Ok(0) => {
-                        // EOF, Client hat die Verbindung getrennt, NOOP
-                    }
-                    Ok(n) => {
-                        // Daten gelesen (werden hier ignoriert, wie im Originalcode)
-                        if n > 0 {
-                            println!("Consumer thread read {} bytes from socket (and ignored them).", n);
-                        }
-                    }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        // Keine Daten verfügbar, weiter
-                    }
-                    Err(e) => {
-                        eprintln!("Error reading from socket in consumer thread: {:?}", e);
-                        break; // Bei anderen Fehlern beenden
-                    }
-                }*/
-
                 // Wenn Pakete im Cache sind, versuche, eines an den Socket zu schreiben
                 if let Some(l) = cache.pop() {
                     if l.size < 1 {

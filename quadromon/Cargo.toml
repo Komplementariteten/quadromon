@@ -16,3 +16,5 @@ pollster = {workspace = true}
 dirs = {workspace = true}
 postcard = {workspace = true}
 fluxo = {path = "../fluxo"}
+quadrosrv = {path = "../quadrosrv"}
+serde_json = {workspace = true}

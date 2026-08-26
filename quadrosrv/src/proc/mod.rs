@@ -8,7 +8,7 @@ const DEFAULT_SERIALIZE_FILE: &str = "quadro.hist";
 const DOT_SERIALIZE_FILE: &str = ".quadro.hist";
 const APP_NAME: &str = "quadromon";
 
-const MAX_HIST_SIZE: usize = 1024;
+pub(crate) const MAX_HIST_SIZE: usize = 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Value {
@@ -141,6 +141,7 @@ pub(crate) struct Processing {
     hist_file: PathBuf,
     last: Vec<Value>,
     pub hist: Vec<Value>,
+    pub(crate) max_hist: usize,
 }
 
 impl Processing {
@@ -156,10 +157,15 @@ impl Processing {
             last: values,
             hist_file: eff_hist,
             hist: vec![],
+            max_hist: MAX_HIST_SIZE,
         };
         p.load();
         p.process();
         p
+    }
+
+    pub(crate) fn set_max_hist(&mut self, max: usize) {
+        self.max_hist = max;
     }
 
     fn get_default_hist_file() -> PathBuf {
@@ -245,7 +251,7 @@ impl Processing {
         }
 
         let latest = self.last.clone();
-        if (self.hist.len() + latest.len()) < MAX_HIST_SIZE {
+        if (self.hist.len() + latest.len()) < self.max_hist {
             self.hist.extend(latest);
         } else {
             let mut new_hist = vec![];
@@ -365,6 +371,7 @@ mod tests {
     fn update_hist_appends_below_limit() {
         let mut p = Processing {
             hist_file: PathBuf::from("/tmp/opencode/quadro-test.hist"),
+            max_hist: MAX_HIST_SIZE,
             last: vec![make_value(1.0, "a")],
             hist: vec![make_value(2.0, "a")],
         };
@@ -384,6 +391,7 @@ mod tests {
         }
         let mut p = Processing {
             hist_file: PathBuf::from("/tmp/opencode/quadro-test.hist"),
+            max_hist: MAX_HIST_SIZE,
             last: vec![make_value(6.0, "a")],
             hist,
         };
@@ -408,6 +416,7 @@ mod tests {
         }
         let mut p = Processing {
             hist_file: PathBuf::from("/tmp/opencode/quadro-test.hist"),
+            max_hist: MAX_HIST_SIZE,
             last: vec![make_value(6.0, "a")],
             hist,
         };

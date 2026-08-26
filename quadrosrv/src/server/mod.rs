@@ -1,3 +1,4 @@
+use crate::app_config::AppConfig;
 use crate::sensors::Config;
 use std::fs::{remove_file, File};
 use std::io::Write;
@@ -37,12 +38,38 @@ pub struct SensorServer {
 }
 
 impl SensorServer {
-    pub fn start(config: &Config) -> Self {
+    /// Startet den Server mit der Konfiguration aus `.config/quadromon.json`.
+    /// Existiert die Datei nicht, wird sie mit einem Beispiel eines vorhandenen
+    /// Sensors angelegt.
+    pub fn start() -> Self {
+        let cfg = AppConfig::load_or_create();
+        Self::start_from_app(&cfg)
+    }
+
+    pub fn start_from_app(app: &AppConfig) -> Self {
+        let sensor_cfg = Config::from_app(app);
         let (tx, rx) = mpsc::channel();
         let stop_flag = Arc::new(AtomicBool::new(false));
+        let poll = Duration::from_millis(app.server.poll_interval_ms);
 
         let sender_h = Self::spawn_server_th(rx, Arc::clone(&stop_flag));
-        let sensor_h = Self::spawn_reader_th(tx, config, Arc::clone(&stop_flag));
+        let sensor_h = Self::spawn_reader_th(tx, sensor_cfg, poll, Arc::clone(&stop_flag));
+
+        SensorServer {
+            handles: (sender_h, sensor_h),
+            stop_flag,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn start_with_config_old(config: &Config) -> Self {
+        let (tx, rx) = mpsc::channel();
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        // altes Verhalten: festes 500ms Intervall
+        let poll = Duration::from_millis(500);
+
+        let sender_h = Self::spawn_server_th(rx, Arc::clone(&stop_flag));
+        let sensor_h = Self::spawn_reader_th(tx, config.clone(), poll, Arc::clone(&stop_flag));
 
         SensorServer {
             handles: (sender_h, sensor_h),
@@ -90,6 +117,32 @@ impl SensorServer {
     }
 
     fn init_socket() -> UnixStream {
+        let p = Self::local_socket();
+
+        match UnixStream::connect(&p) {
+            Ok(s) => s,
+            Err(_) => {
+                if p.exists() {
+                    let _ = remove_file(&p);
+                }
+                let listener = match UnixListener::bind(&p) {
+                    Ok(listener) => listener,
+                    Err(e) => {
+                        eprintln!("failed to create socket at {:?}: {}", p, e);
+                        panic!("failed to create socket: {}", e);
+                    }
+                };
+                let addr = listener.local_addr().unwrap();
+                UnixStream::connect_addr(&addr).unwrap_or_else(|e| {
+                    eprintln!("Could not connect to socket at {:?} with error: {}", addr, e);
+                    panic!("Could not connect to socket with error: {}", e);
+                })
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    fn init_socket_old() -> UnixStream {
         let p = Self::local_socket();
 
         match UnixStream::connect(&p) {
@@ -160,10 +213,11 @@ impl SensorServer {
 
     fn spawn_reader_th(
         tx: Sender<Package>,
-        config: &Config,
+        config: Config,
+        poll: Duration,
         stop_flag: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        let mut local_cfg = config.clone();
+        let mut local_cfg = config;
         thread::spawn(move || {
             while !stop_flag.load(Acquire) {
                 for m in &mut local_cfg.modules {
@@ -177,7 +231,7 @@ impl SensorServer {
                     eprintln!("receiver disconnected, stopping sensor thread: {}", e);
                     break;
                 }
-                thread::sleep(Duration::from_millis(500));
+                thread::sleep(poll);
             }
         })
     }
@@ -269,20 +323,35 @@ impl SensorServer {
 
 #[cfg(test)]
 mod tests {
-    use crate::sensors::Config;
+    use crate::app_config::{AppConfig, ModuleCfg, SensorCfg};
+    use crate::sensors::SensorType;
     use crate::server::{SensorServer, DEFAULT_DIR, DEFAULT_SOCKET};
     use std::thread;
     use std::time::Duration;
 
+    fn test_app() -> AppConfig {
+        AppConfig {
+            server: Default::default(),
+            history: Default::default(),
+            modules: vec![ModuleCfg {
+                module_name: "quadro".to_string(),
+                sensors: vec![SensorCfg {
+                    name: "Sensor 1".to_string(),
+                    s_type: SensorType::Temperature,
+                }],
+            }],
+        }
+    }
+
     #[test]
     fn test_init_and_restart() {
         // Erster Lebenszyklus
-        let server = SensorServer::start(&Config::default());
+        let server = SensorServer::start_from_app(&test_app());
         thread::sleep(Duration::from_millis(1000));
         server.stop();
 
         // Mit globalem Stop-Flag bliebe ein zweiter Start sofort stehen.
-        let server = SensorServer::start(&Config::default());
+        let server = SensorServer::start_from_app(&test_app());
         thread::sleep(Duration::from_millis(300));
         server.stop();
     }

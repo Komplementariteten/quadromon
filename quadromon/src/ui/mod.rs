@@ -6,7 +6,7 @@ use fluxo::components::Component;
 mod app;
 pub(crate) mod sensor_handle;
 
-pub trait EventDrivenPlugin {
+pub(crate) trait EventDrivenPlugin {
     type Component: Component;
 
     fn event_tick(&mut self) -> anyhow::Result<()>;

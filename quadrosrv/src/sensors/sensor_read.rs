@@ -115,11 +115,9 @@ mod tests {
 
     #[test]
     fn test_read() {
-        let default = Config::default();
-        if find_module(&default.modules[0]).is_ok() {
-            let r = read(&default.modules[0]);
-            assert!(!r.is_empty());
-        }
+        let config = Module::default();
+        let r = read(&config);
+        assert!(!r.is_empty());
     }
 
     #[test]
@@ -133,20 +131,14 @@ mod tests {
     #[test]
     fn test_check_sensor() {
         let cfg = SensorConfig::new("Flow speed [dL/h]", SensorType::FlowSpeed);
-        let default = Config::default();
-        if let Ok(mod_path) = find_module(&default.modules[0]) {
-            let r = check_sensor(&cfg, mod_path.to_str().unwrap());
-            assert!(r.is_ok());
-        }
+        let r = check_sensor(&cfg, "/sys/class/hwmon/hwmon6");
+        assert!(r.is_ok());
     }
 
     #[test]
     fn test_read_sensor() {
         let cfg = SensorConfig::new("Flow speed [dL/h]", SensorType::FlowSpeed);
-        let default = Config::default();
-        if let Ok(mod_path) = find_module(&default.modules[0]) {
-            let r = read_sensor(&cfg, &mod_path);
-            assert!(r.is_some());
-        }
+        let r = read_sensor(&cfg, &PathBuf::from("/sys/class/hwmon/hwmon6"));
+        assert!(r.is_some());
     }
 }

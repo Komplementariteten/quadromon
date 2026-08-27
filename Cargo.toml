@@ -19,4 +19,4 @@ skrifa = "0.40.0"
 
 [workspace]
 resolver = "3"
-members = ["quadromon", "examples/text", "examples/config", "examples/server_init", "fluxo", "quadrosrv"]
+members = ["quadromon", "examples/text", "fluxo", "quadrosrv"]

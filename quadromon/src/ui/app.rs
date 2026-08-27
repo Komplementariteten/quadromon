@@ -157,7 +157,7 @@ impl<Plugins: EventDrivenPlugin> ApplicationHandler for QuadromonApp<Plugins> {
         }
     }
 
-    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+    fn suspended(&mut self, event_loop: &ActiveEventLoop) {
         if let RenderState::Active { window, .. } = &mut self.state {
             self.state = RenderState::Suspended(Some(window.clone()))
         }

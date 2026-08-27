@@ -1,9 +1,7 @@
 pub mod sensor_read;
 
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use crate::proc::Processing;
-use crate::app_config::{AppConfig, ModuleCfg, SensorCfg};
 
 pub const FLOW_SPEED_NAME: &str = "Flow speed [dL/h]";
 pub const TEMP_SENSOR_NAME: &str = "Sensor 1";
@@ -21,11 +19,10 @@ pub struct Config {
 pub struct Module {
     pub module_name: String,
     pub sensors: Vec<SensorConfig>,
-    pub(crate) p: Option<Processing>,
-    hist_max: usize,
+    p: Option<Processing>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum SensorType {
     Temperature,
     InputVoltage,
@@ -115,54 +112,20 @@ impl SensorConfig {
 }
 
 impl Module {
-    pub(crate) fn new(name: &str, sensors: Vec<SensorConfig>) -> Module {
+    fn new(name: &str, sensors: Vec<SensorConfig>) -> Module {
         Module {
             module_name: name.to_string(),
             p: None,
-            hist_max: crate::proc::MAX_HIST_SIZE,
             sensors,
         }
     }
-
-    pub(crate) fn from_cfg(cfg: &ModuleCfg, hist_max: usize) -> Module {
-        let mut m = Module::new(
-            cfg.module_name.as_str(),
-            cfg.sensors.iter().map(SensorConfig::from_cfg).collect(),
-        );
-        m.hist_max = hist_max;
-        m
-    }
-
+    
     pub fn read(&mut self) {
         let r = sensor_read::read(self);
         if self.p.is_none() {
-            let mut p = Processing::init(r.clone(), None);
-            p.set_max_hist(self.hist_max);
-            self.p = Some(p)
+            self.p = Some(Processing::init(r.clone(), None))
         } else if let Some(p) = self.p.as_mut() {
-            p.set_max_hist(self.hist_max);
             p.update(r);
-        }
-    }
-}
-
-impl Config {
-    pub fn from_app(app: &AppConfig) -> Config {
-        Config {
-            modules: app
-                .modules
-                .iter()
-                .map(|m| Module::from_cfg(m, app.history.max_size))
-                .collect(),
-        }
-    }
-}
-
-impl SensorConfig {
-    pub(crate) fn from_cfg(cfg: &SensorCfg) -> SensorConfig {
-        SensorConfig {
-            name: cfg.name.clone(),
-            s_type: cfg.s_type.clone(),
         }
     }
 }
@@ -191,48 +154,5 @@ impl Default for Config {
                 ),
             ],
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app_config::{AppConfig, SensorCfg};
-
-    #[test]
-    fn from_app_maps_modules_and_sensors() {
-        let app = AppConfig {
-            history: crate::app_config::HistoryCfg { max_size: 77 },
-            ..AppConfig::default()
-        };
-        // Beispiel erzeugen, damit Module vorhanden sind
-        let mut app = app;
-        app.modules = vec![crate::app_config::ModuleCfg {
-            module_name: "testmod".to_string(),
-            sensors: vec![SensorCfg {
-                name: "Sensor 1".to_string(),
-                s_type: SensorType::Temperature,
-            }],
-        }];
-
-        let mut cfg = Config::from_app(&app);
-        assert_eq!(cfg.modules.len(), 1);
-        assert_eq!(cfg.modules[0].module_name, "testmod");
-        assert_eq!(cfg.modules[0].sensors[0].name, "Sensor 1");
-        assert_eq!(cfg.modules[0].sensors.len(), 1);
-
-        // hist_max muss aus der Config uebernommen werden
-        cfg.modules[0].read();
-        if let Some(p) = &cfg.modules[0].p {
-            assert_eq!(p.max_hist, 77);
-        } else {
-            panic!("Processing should be initialized after read");
-        }
-    }
-
-    #[test]
-    fn default_config_uses_default_hist_size() {
-        let m = Module::default();
-        assert_eq!(m.hist_max, crate::proc::MAX_HIST_SIZE);
     }
 }

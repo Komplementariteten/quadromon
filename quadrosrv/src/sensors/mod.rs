@@ -1,8 +1,11 @@
 mod config;
 pub mod sensor_read;
+mod sensor_module;
 
 use std::path::PathBuf;
-use crate::proc::Processing;
+use bitcode::{Decode, Encode};
+use serde::{Deserialize, Serialize};
+use crate::sensors::sensor_module::Module;
 
 pub const FLOW_SPEED_NAME: &str = "Flow speed [dL/h]";
 pub const TEMP_SENSOR_NAME: &str = "Sensor 1";
@@ -11,19 +14,13 @@ const QUADRO_MODULE: &str = "quadro";
 
 const MAINBOARD_MODULE: &str = "nct6687";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub modules: Vec<Module>,
+    pub(crate) modules: Vec<Module>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Module {
-    pub module_name: String,
-    pub sensors: Vec<SensorConfig>,
-    p: Option<Processing>,
-}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SensorType {
     Temperature,
     InputVoltage,
@@ -33,22 +30,23 @@ pub enum SensorType {
     Unknown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SensorConfig {
     pub name: String,
     pub s_type: SensorType,
 }
 
+/// Single Read Result directly form a sensor
 #[derive(Debug, Clone)]
-pub struct ResultWrapper {
+pub struct SensorReadResultWrapper {
     _values: Vec<String>,
     pub name: String,
     _t: SensorType,
 }
 
-impl ResultWrapper {
-    pub fn new(name: &str, bytes: Vec<String>, t: SensorType) -> ResultWrapper {
-        ResultWrapper {
+impl SensorReadResultWrapper {
+    pub fn new(name: &str, bytes: Vec<String>, t: SensorType) -> SensorReadResultWrapper {
+        SensorReadResultWrapper {
             _values: bytes,
             name: name.to_string(),
             _t: t,
@@ -60,7 +58,7 @@ impl ResultWrapper {
                 // let bytes: [u8; 4] = self._values[0][0..4].try_into().expect("Failed to read bytes");
                 let int_value = self._values[0].trim().parse::<i32>().expect("not a number");
                 ReadResult::Temperature(self.name.clone(), int_value)
-            },
+            }
             SensorType::FlowSpeed => {
                 let in_value = self._values[0].trim().parse::<i32>().expect("not a number");
                 let pulse_value = self._values[1].trim().parse::<i32>().expect("not a number");
@@ -119,31 +117,6 @@ impl SensorConfig {
     }
 }
 
-impl Module {
-    fn new(name: &str, sensors: Vec<SensorConfig>) -> Module {
-        Module {
-            module_name: name.to_string(),
-            p: None,
-            sensors,
-        }
-    }
-    
-    pub fn read(&mut self) {
-        let r = sensor_read::read(self);
-        if self.p.is_none() {
-            self.p = Some(Processing::init(r.clone(), None))
-        } else if let Some(p) = self.p.as_mut() {
-            p.update(r);
-        }
-    }
-}
-
-impl Default for Module {
-    fn default() -> Self {
-        Module::new("default", Vec::new())
-    }
-}
-
 
 impl Default for Config {
     fn default() -> Self {
@@ -154,11 +127,11 @@ impl Default for Config {
                     vec![
                         SensorConfig::new(FLOW_SPEED_NAME, SensorType::FlowSpeed),
                         SensorConfig::new(TEMP_SENSOR_NAME, SensorType::Temperature),
-                    ],
+                    ], None
                 ),
                 Module::new(
                     MAINBOARD_MODULE,
-                    vec![SensorConfig::new(PUMP_SPEED_NAME, SensorType::FanSpeed)],
+                    vec![SensorConfig::new(PUMP_SPEED_NAME, SensorType::FanSpeed)], None
                 ),
             ],
         }

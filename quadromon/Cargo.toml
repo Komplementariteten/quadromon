@@ -6,13 +6,14 @@ rust-version.workspace = true
 # license.workspace = true
 
 [dependencies]
-vello = {workspace = true}
-glob = {workspace = true}
-regex = {workspace = true}
-winit = {workspace = true}
-anyhow = {workspace = true}
-serde = {workspace = true}
-pollster = {workspace = true}
-dirs = {workspace = true}
-postcard = {workspace = true}
-fluxo = {path = "../fluxo"}
+vello = { workspace = true }
+glob = { workspace = true }
+regex = { workspace = true }
+winit = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+pollster = { workspace = true }
+dirs = { workspace = true }
+postcard = { workspace = true }
+fluxo = { path = "../fluxo" }
+quadrosrv = { path = "../quadrosrv" }

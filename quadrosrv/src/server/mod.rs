@@ -1,3 +1,5 @@
+pub mod load;
+
 use crate::sensors::Config;
 use std::fs::{remove_file, File};
 use std::io::Write;
@@ -31,12 +33,12 @@ const DEFAULT_DIR: &str = ".quadro/";
 static STOP_SYNC: AtomicBool = AtomicBool::new(false);
 
 impl SensorServer {
-    pub fn local_socket() -> PathBuf {
+    fn local_socket() -> PathBuf {
         let path = match dirs::home_dir() {
             Some(path) => path,
             None => panic!("Home dir not set"),
         }
-        .join(DEFAULT_DIR);
+            .join(DEFAULT_DIR);
         if !path.exists() {
             std::fs::create_dir_all(&path).unwrap();
             let fs = path.join(DEFAULT_SOCKET);
@@ -69,6 +71,7 @@ impl SensorServer {
         b.join().expect("failed to join socket");
     }
 
+    /// Actual Processing of the Socket Connection
     fn server_th(rx: Receiver<Package>) -> JoinHandle<()> {
         thread::spawn(move || {
             let mut cache: Vec<Package> = vec![];
@@ -127,6 +130,7 @@ impl SensorServer {
         })
     }
 
+    /// Triggers Modules for actual sensor reading
     fn reader_thread(tx: Sender<Package>, config: &Config) -> JoinHandle<()> {
         let mut local_cfg = config.clone();
         thread::spawn(move || {
@@ -135,7 +139,7 @@ impl SensorServer {
                     m.read();
                 }
                 let d = [0u8; MAX_PACKAGE_SIZE];
-                tx.send(Package { size: 1024, c: d })
+                tx.send(Package { size: MAX_PACKAGE_SIZE as u32, c: d })
                     .expect("Failed to send package from sensor thread"); // Aussagekräftigere Fehlermeldung
                 println!("Package sent from sensor thread");
                 thread::sleep(Duration::from_millis(500));

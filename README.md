@@ -2,6 +2,14 @@
 
 Small tool to minotor Pump and Flow on Aquacomputer Quadro
 
+# TODOs
+
+- [ ] Imple Serialization for Sensor read and Processing result
+- [ ] Submit Result through socket
+- [ ] Implement Client
+- [ ] Implement Client side deserialization
+- [ ] ...
+
 # Agend
 
 Initialer Promt:

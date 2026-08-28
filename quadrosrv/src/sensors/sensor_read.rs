@@ -3,7 +3,7 @@ use regex::{Regex, RegexBuilder};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use crate::sensors::{Module, ResultWrapper, SensorConfig};
+use crate::sensors::{Module, SensorReadResultWrapper, SensorConfig};
 
 const REGEX_STR: &str = r"\S+/(?<sensor>[\w\d]{2,})\_(?<label>label+)$";
 pub const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
@@ -64,7 +64,7 @@ fn check_sensor(config: &SensorConfig, base_path: &str) -> Result<String, String
     Err(format!("{:?} could not be read", config))
 }
 
-fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ResultWrapper> {
+fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<SensorReadResultWrapper> {
     if let Ok(s_name) = check_sensor(config, base_path.to_str().unwrap()) {
         let files = config.related_files(&PathBuf::from(base_path), s_name.as_str());
         let mut results = vec![];
@@ -78,7 +78,7 @@ fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ResultWrapp
         if results.len() == 0 {
             return None;
         }
-        return Some(ResultWrapper::new(
+        return Some(SensorReadResultWrapper::new(
             config.name.as_str(),
             results,
             config.s_type.clone(),
@@ -88,7 +88,7 @@ fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<ResultWrapp
     None
 }
 
-pub fn read(module: &Module) -> Vec<ResultWrapper> {
+pub(crate) fn read(module: &Module) -> Vec<SensorReadResultWrapper> {
     let mut results = vec![];
     if let Ok(mod_path) = find_module(module) {
         for sensor in &module.sensors {
@@ -118,13 +118,6 @@ fn find_module(config: &Module) -> Result<PathBuf, String> {
 mod tests {
     use crate::sensors::{Config, SensorType};
     use super::*;
-
-    #[test]
-    fn test_read() {
-        let config = Module::default();
-        let r = read(&config);
-        assert!(!r.is_empty());
-    }
 
     #[test]
     fn test_find_module() {

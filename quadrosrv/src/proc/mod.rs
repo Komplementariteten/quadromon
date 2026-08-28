@@ -1,173 +1,41 @@
-use crate::sensors::{ReadResult, ResultWrapper};
-use dirs::{data_local_dir, home_dir};
-use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::PathBuf;
+pub(crate) mod history;
+pub mod proc_values;
 
-const DEFAULT_SERIALIZE_FILE: &str = "quadro.hist";
-const DOT_SERIALIZE_FILE: &str = ".quadro.hist";
-const APP_NAME: &str = "quadromon";
+use crate::sensors::{ReadResult};
+use crate::proc::history::History;
+use crate::proc::proc_values::{Value, ValueType};
 
 const MAX_HIST_SIZE: usize = 1024;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Value {
-    pub value: f32,
-    pub source: String,
-    pub display: String,
-    pub unit: String,
-    value_type: ValueType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-enum ValueType {
-    FlowSpeed,
-    Temperature,
-    FanSpeed,
-    Pwm,
-    Calculated,
-    Default,
-}
-impl Value {
-    pub(crate) fn new(r: ResultWrapper, display_name: &str) -> Self {
-        let result = r.format();
-        match result {
-            ReadResult::FlowSpeed(name, rpm, pulses) => {
-                
-                println!("rpm:{rpm}, pulses:{pulses}");
-                
-                let dlh: f64 = (rpm * 600) as f64 / (pulses as f64);
-                Value {
-                    value: dlh as f32,
-                    source: name,
-                    display: display_name.to_string(),
-                    unit: "dL/h".to_string(),
-                    value_type: ValueType::FlowSpeed,
-                }
-            }
-            ReadResult::Temperature(name, temp) => {
-                let celsius = temp as f32 / 1000.0;
-                Value {
-                    value: celsius,
-                    source: name,
-                    display: display_name.to_string(),
-                    unit: "Celsius".to_string(),
-                    value_type: ValueType::Temperature,
-                }
-            }
-            ReadResult::FanSpeed(name, fan_value) => {
-                let percent: f32 = (fan_value as f32) / 1810.0;
-                Value {
-                    source: name,
-                    value: percent,
-                    display: display_name.to_string(),
-                    unit: "Percent".to_string(),
-                    value_type: ValueType::FanSpeed,
-                }
-            }
-            ReadResult::Pwm(name, v1, _) => Value {
-                source: name.clone(),
-                display: name,
-                value: v1 as f32,
-                unit: display_name.to_string(),
-                value_type: ValueType::Pwm,
-            },
-            _ => Value {
-                value: 0.0,
-                source: "".to_string(),
-                display: display_name.to_string(),
-                unit: "".to_string(),
-                value_type: ValueType::Default,
-            },
-        }
-    }
-}
-
-impl Into<f64> for &Value {
-    fn into(self) -> f64 {
-        self.value as f64
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Processing {
-    hist_file: PathBuf,
-    last: Vec<Value>,
-    pub hist: Vec<Value>,
-    // Values to Display
-    pub res: Vec<Value>,
+    pub last: Option<Value>,
+    hist: Option<History>,
 }
 
 impl Processing {
     pub(crate) fn new() -> Self {
         Processing {
-            hist_file: Self::get_default_hist_file(),
-            last: vec![],
-            hist: vec![],
-            res: vec![],
+            last: None,
+            hist: None,
         }
     }
-    pub(crate) fn init(results: Vec<ResultWrapper>, hist_file: Option<PathBuf>) -> Processing {
-        let mut values = vec![];
-        // ToDo: this crashes
-        for result in &results {
-            values.push(Value::new(result.clone(), result.name.as_str()));
-        }
-
-        let eff_hist = match hist_file {
-            Some(h) => h,
-            _ => Self::get_default_hist_file(),
-        };
-
-        let mut p = Processing {
-            last: values,
-            hist_file: eff_hist,
-            hist: vec![],
-            res: vec![],
-        };
-        p.load();
-        p.process();
-        p
-    }
-
-    fn get_default_hist_file() -> PathBuf {
-        if let Some(data_dir) = data_local_dir() {
-            return data_dir.join(APP_NAME).join(DEFAULT_SERIALIZE_FILE);
-        }
-
-        if let Some(home_dir) = home_dir() {
-            return home_dir.join(DOT_SERIALIZE_FILE);
-        }
-
-        PathBuf::from(DEFAULT_SERIALIZE_FILE)
-    }
-
-    fn load(&mut self) {
-        if self.hist_file.exists()
-            && let Ok(bytes) = std::fs::read(self.hist_file.clone())
-        {
-            let v: Vec<Value> = postcard::from_bytes(&bytes).expect("Failed to read form binary");
-            self.hist = v;
+    
+    pub(crate) fn init(&mut self, h: Option<&History>) {
+        if let Some(h) = h {
+            self.hist = Some(h.clone());
         }
     }
-
-    fn store(&mut self) {
-        if let Ok(bytes) = postcard::to_stdvec(&self.hist.clone()) {
-            fs::write(self.hist_file.clone(), bytes).expect("Failed to write binary");
-        }
-    }
-
-    pub fn update(&mut self, results: Vec<ResultWrapper>) {
-        let mut values = vec![];
-        for result in results {
-            values.push(Value::new(result, ""));
-        }
-        self.last = values;
+    
+    pub fn update(&mut self, result: ReadResult) {
+        let v = Value::new(result);
+        self.last = Some(v);
         self.process();
-        self.store();
     }
 
-    pub(crate) fn process(&mut self) {
+    fn process(&mut self) {
+
+        // handle Flow values
         if let Some(flow) = self
             .last
             .iter()
@@ -175,10 +43,9 @@ impl Processing {
             && let Some(rel_temp) = self.last.iter().find(|v| v.source.eq("Sensor 1"))
         {
             let temp_speed = rel_temp.value / flow.value;
-            self.last.push(Value {
+            self.last = Some(Value {
                 value: temp_speed,
                 source: "Temp / Flow".to_string(),
-                display: "Temp / Flow".to_string(),
                 value_type: ValueType::Calculated,
                 unit: "Temp h / dL".to_string(),
             })
@@ -206,27 +73,17 @@ impl Processing {
     }
 
     fn update_hist(&mut self) {
-        if self.last.is_empty() {
-            return;
-        }
-
-        let latest = self.last.clone();
-        if (self.hist.len() + latest.len()) < MAX_HIST_SIZE {
-            self.hist.extend(latest);
-        } else {
-            let mut new_hist = vec![];
-            for v in latest {
-                let items = self
-                    .hist
-                    .iter()
-                    .filter(|v| v.source.eq(&v.source))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                new_hist.extend(Self::reduce(items));
+        if let Some(last) = self.last.clone() {
+            
+            // Initialize History
+            if self.hist.is_none(){
+                self.hist = Some(History::new(MAX_HIST_SIZE, &last.source, &last.unit, last.value_type.clone()));
             }
-            self.hist = Processing::reduce(new_hist);
+            
+            if let Some(hist) = &mut self.hist {
+                hist.update(last);
+            }
         }
-        self.last.clear();
     }
 }
 
@@ -241,28 +98,24 @@ mod tests {
                 source: "a".to_string(),
                 unit: "".to_string(),
                 value_type: ValueType::Default,
-                display: "".to_string(),
             },
             Value {
                 value: 2.0,
                 source: "a".to_string(),
                 unit: "".to_string(),
                 value_type: ValueType::Default,
-                display: "".to_string(),
             },
             Value {
                 value: 3.0,
                 source: "b".to_string(),
                 unit: "".to_string(),
                 value_type: ValueType::Default,
-                display: "".to_string(),
             },
             Value {
                 value: 4.0,
                 source: "b".to_string(),
                 unit: "".to_string(),
                 value_type: ValueType::Default,
-                display: "".to_string(),
             },
         ]);
         assert_eq!(r.len(), 2);

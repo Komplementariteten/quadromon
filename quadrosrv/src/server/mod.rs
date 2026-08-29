@@ -10,7 +10,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
+use std::{fs, thread};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -65,10 +65,15 @@ impl SensorServer {
         }
     }
 
-    pub fn stop(a: JoinHandle<()>, b: JoinHandle<()>) {
+    pub fn stop(a: JoinHandle<()>, b: JoinHandle<Config>) -> Config {
         STOP_SYNC.store(true, Relaxed);
         a.join().expect("failed to join socket");
-        b.join().expect("failed to join socket");
+        let cfg = b.join().expect("failed to join socket");
+        let s_path = Self::local_socket();
+        if s_path.exists() {
+            remove_file(Self::local_socket()).expect("failed to remove socket file");
+        }
+        cfg
     }
 
     /// Actual Processing of the Socket Connection
@@ -131,7 +136,7 @@ impl SensorServer {
     }
 
     /// Triggers Modules for actual sensor reading
-    fn reader_thread(tx: Sender<Package>, config: &Config) -> JoinHandle<()> {
+    fn reader_thread(tx: Sender<Package>, config: &Config) -> JoinHandle<Config> {
         let mut local_cfg = config.clone();
         thread::spawn(move || {
             while !STOP_SYNC.load(Relaxed) {
@@ -145,10 +150,11 @@ impl SensorServer {
                 thread::sleep(Duration::from_millis(500));
             }
             println!("Sensor thread finished.");
+            local_cfg
         })
     }
 
-    pub fn start(config: &Config) -> (JoinHandle<()>, JoinHandle<()>) {
+    pub fn start(config: &Config) -> (JoinHandle<()>, JoinHandle<Config>) {
         let (tx, rx) = mpsc::channel();
         let sender_h = SensorServer::server_th(rx);
         let sensor_h = SensorServer::reader_thread(tx.clone(), config);

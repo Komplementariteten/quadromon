@@ -1,11 +1,9 @@
-mod config;
-pub mod sensor_read;
 mod sensor_module;
+pub mod sensor_read;
 
-use std::path::PathBuf;
-use bitcode::{Decode, Encode};
-use serde::{Deserialize, Serialize};
 use crate::sensors::sensor_module::Module;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 pub const FLOW_SPEED_NAME: &str = "Flow speed [dL/h]";
 pub const TEMP_SENSOR_NAME: &str = "Sensor 1";
@@ -19,6 +17,35 @@ pub struct Config {
     pub(crate) modules: Vec<Module>,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Config {
+    pub fn new() -> Self {
+        Config { modules: vec![] }
+    }
+
+    pub(crate) fn add_module(&mut self, module: Module) {
+        self.modules.push(module);
+    }
+
+    pub fn init_default(&mut self) {
+        self.add_module(Module::new(
+            QUADRO_MODULE,
+            vec![
+                SensorConfig::new(FLOW_SPEED_NAME, SensorType::FlowSpeed),
+                SensorConfig::new(TEMP_SENSOR_NAME, SensorType::Temperature),
+            ],
+        ));
+        self.add_module(Module::new(
+            MAINBOARD_MODULE,
+            vec![SensorConfig::new(PUMP_SPEED_NAME, SensorType::Pwm)],
+        ));
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SensorType {
@@ -36,7 +63,7 @@ pub struct SensorConfig {
     pub s_type: SensorType,
 }
 
-/// Single Read Result directly form a sensor
+/// Single Read Result directly from a sensor
 #[derive(Debug, Clone)]
 pub struct SensorReadResultWrapper {
     _values: Vec<String>,
@@ -55,16 +82,19 @@ impl SensorReadResultWrapper {
     pub fn format(&self) -> ReadResult {
         match self._t {
             SensorType::Temperature => {
-                // let bytes: [u8; 4] = self._values[0][0..4].try_into().expect("Failed to read bytes");
                 let int_value = self._values[0].trim().parse::<i32>().expect("not a number");
                 ReadResult::Temperature(self.name.clone(), int_value)
             }
             SensorType::FlowSpeed => {
                 let in_value = self._values[0].trim().parse::<i32>().expect("not a number");
                 let pulse_value = self._values[1].trim().parse::<i32>().expect("not a number");
-                // let in_bytes: [u8; 4] = self._values[0][0..4].try_into().expect("Failed to read bytes");
-                // let pulse_bytes: [u8; 4] = self._values[1][0..4].try_into().expect("Failed to read bytes");
                 ReadResult::FlowSpeed(self.name.clone(), in_value, pulse_value)
+            }
+            SensorType::Pwm => {
+                let pwm_value = self._values[0].trim().parse::<i32>().expect("not a number");
+                let max_value = self._values[1].trim().parse::<i32>().expect("not a number");
+                let min_value = self._values[2].trim().parse::<i32>().expect("not a number");
+                ReadResult::Pwm(self.name.clone(), pwm_value, max_value, min_value)
             }
             _ => ReadResult::None,
         }
@@ -75,7 +105,7 @@ pub enum ReadResult {
     Temperature(String, i32),
     InputVoltage(String, i32),
     FanSpeed(String, i32),
-    Pwm(String, i32, i32),
+    Pwm(String, i32, i32, i32),
     FlowSpeed(String, i32, i32),
     None,
 }
@@ -104,6 +134,10 @@ impl SensorConfig {
             SensorType::Pwm => {
                 let input = base_path.join(format!("{}_input", mod_file));
                 related_files.push(input);
+                let max = base_path.join(format!("{}_max", mod_file));
+                related_files.push(max);
+                let min = base_path.join(format!("{}_min", mod_file));
+                related_files.push(min);
             }
             SensorType::Temperature => {
                 let input = base_path.join(format!("{}_input", mod_file));
@@ -114,26 +148,5 @@ impl SensorConfig {
             _ => {}
         };
         related_files
-    }
-}
-
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            modules: vec![
-                Module::new(
-                    QUADRO_MODULE,
-                    vec![
-                        SensorConfig::new(FLOW_SPEED_NAME, SensorType::FlowSpeed),
-                        SensorConfig::new(TEMP_SENSOR_NAME, SensorType::Temperature),
-                    ], None
-                ),
-                Module::new(
-                    MAINBOARD_MODULE,
-                    vec![SensorConfig::new(PUMP_SPEED_NAME, SensorType::FanSpeed)], None
-                ),
-            ],
-        }
     }
 }

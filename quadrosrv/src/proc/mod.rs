@@ -9,8 +9,8 @@ const MAX_HIST_SIZE: usize = 1024;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Processing {
-    pub last: Option<Value>,
-    hist: Option<History>,
+    pub(crate) last: Option<Value>,
+    pub(crate) hist: Option<History>,
 }
 
 impl Processing {
@@ -21,10 +21,8 @@ impl Processing {
         }
     }
     
-    pub(crate) fn init(&mut self, h: Option<&History>) {
-        if let Some(h) = h {
-            self.hist = Some(h.clone());
-        }
+    pub(crate) fn init(&mut self, h: &History) {
+        self.hist = Some(h.clone());
     }
     
     pub fn update(&mut self, result: ReadResult) {

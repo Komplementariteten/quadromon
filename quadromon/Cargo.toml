@@ -17,3 +17,4 @@ dirs = { workspace = true }
 postcard = { workspace = true }
 fluxo = { path = "../fluxo" }
 quadrosrv = { path = "../quadrosrv" }
+log = "0.4.34"

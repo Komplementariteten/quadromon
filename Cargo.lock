@@ -1771,6 +1771,7 @@ dependencies = [
  "dirs",
  "fluxo",
  "glob",
+ "log",
  "pollster",
  "postcard",
  "quadrosrv",

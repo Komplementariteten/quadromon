@@ -49,11 +49,14 @@ impl Value {
                     value_type: ValueType::FanSpeed,
                 }
             }
-            ReadResult::Pwm(name, v1, _) => Value {
-                source: name.clone(),
-                value: v1 as f32,
-                unit: "PWM".to_string(),
-                value_type: ValueType::Pwm,
+            ReadResult::Pwm(name, v1, max, _) => {
+                let percent: f32 = (v1 as f32) / (max as f32);
+                Value {
+                    source: name.clone(),
+                    value: percent,
+                    unit: "PWM".to_string(),
+                    value_type: ValueType::Pwm,
+                }
             },
             _ => Value {
                 value: 0.0,

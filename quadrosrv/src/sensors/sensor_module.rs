@@ -7,25 +7,17 @@ use crate::sensors::{sensor_read, SensorConfig};
 
 // Multiple Sensor Modules
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub (crate) struct Module {
-    pub (crate) module_name: String,
-    pub (crate) sensors: Vec<SensorConfig>,
+pub(crate) struct Module {
+    pub(crate) module_name: String,
+    pub(crate) sensors: Vec<SensorConfig>,
     #[serde(skip)]
-    pub (crate) p: HashMap<String, Processing>,
+    pub(crate) p: HashMap<String, Processing>,
 }
 
 
 impl Module {
-    pub(crate) fn new(name: &str, sensors: Vec<SensorConfig>, hm: Option<HashMap<String, History>>) -> Module {
-        let mut pm = HashMap::new();
-        for sensor in &sensors {
-            let mut p = Processing::new();
-            if let Some(map) = &hm {
-                p.init(map.get(&sensor.name));
-            } 
-            pm.insert(sensor.name.clone(), p);
-        }
-        
+    pub(crate) fn new(name: &str, sensors: Vec<SensorConfig>) -> Module {
+        let pm = HashMap::new();
         Module {
             module_name: name.to_string(),
             sensors,
@@ -42,9 +34,31 @@ impl Module {
             if let Some(p) = self.p.get_mut(&r.name) {
                 p.update(r.format());
             } else {
-                warn!("No processing module found for sensor {}", r.name);
+                let mut p = Processing::new();
+                p.update(r.format());
+                self.p.insert(r.name.clone(), p);
             }
         }
     }
 
+    pub fn load_processing(&mut self, h: &HashMap<String, History>) {
+        self.p.clear();
+        for sensor in &self.sensors {
+            if let Some(h) = h.get(&sensor.name) {
+                let mut p = Processing::new();
+                p.init(h);
+                self.p.insert(sensor.name.clone(), p);
+            }
+        }
+    }
+
+    pub fn export_hist(&self) -> HashMap<String, History> {
+        let mut hm = HashMap::new();
+        for (k, v) in &self.p {
+            if let Some(hist) = &v.hist {
+                hm.insert(k.clone(), hist.clone());
+            }
+        }
+        hm
+    }
 }

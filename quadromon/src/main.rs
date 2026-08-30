@@ -1,13 +1,9 @@
-use std::path::PathBuf;
+use log::error;
+use quadrosrv::sensors::Config;
+use quadrosrv::server;
+use quadrosrv::server::SensorServer;
 use std::process::ExitCode;
 use std::thread;
-use std::thread::Thread;
-use log::{error, info};
-use quadrosrv::sensors::Config;
-use quadrosrv::{consts, server};
-use quadrosrv::server::SensorServer;
-
-pub mod ui;
 
 fn main() -> ExitCode {
     let mut cfg = Config::default();

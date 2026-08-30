@@ -1,5 +1,5 @@
-use bitcode::{Decode, Encode};
 use crate::proc::{Value, ValueType};
+use bitcode::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub(crate) struct History {

@@ -1,6 +1,6 @@
+use crate::sensors::ReadResult;
 use bitcode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-use crate::sensors::ReadResult;
 
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub(crate) struct Value {
@@ -57,7 +57,7 @@ impl Value {
                     unit: "PWM".to_string(),
                     value_type: ValueType::Pwm,
                 }
-            },
+            }
             _ => Value {
                 value: 0.0,
                 source: "".to_string(),

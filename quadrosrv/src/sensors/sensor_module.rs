@@ -1,9 +1,10 @@
-use std::collections::HashMap;
-use log::{debug, info, warn};
-use serde::{Deserialize, Serialize};
-use crate::proc::history::History;
+use crate::client::sensor_dto::SensorDto;
 use crate::proc::Processing;
-use crate::sensors::{sensor_read, SensorConfig};
+use crate::proc::history::History;
+use crate::sensors::{SensorConfig, sensor_read};
+use log::{debug, info};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // Multiple Sensor Modules
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -13,7 +14,6 @@ pub(crate) struct Module {
     #[serde(skip)]
     pub(crate) p: HashMap<String, Processing>,
 }
-
 
 impl Module {
     pub(crate) fn new(name: &str, sensors: Vec<SensorConfig>) -> Module {
@@ -25,8 +25,9 @@ impl Module {
         }
     }
 
-    // Read from all Sensors in Module    
-    pub fn read(&mut self) {
+    // Read from all Sensors in Module
+    pub fn read(&mut self) -> Vec<SensorDto> {
+        let mut dtos = vec![];
         info!("Reading {}", self.module_name);
         let results = sensor_read::read(self);
         debug!("Read {} results", results.len());
@@ -39,6 +40,14 @@ impl Module {
                 self.p.insert(r.name.clone(), p);
             }
         }
+        for s in &self.sensors {
+            if let Some(p) = self.p.get(&s.name)
+                && let Some(export) = p.export(&self.module_name)
+            {
+                dtos.push(export);
+            }
+        }
+        dtos
     }
 
     pub fn load_processing(&mut self, h: &HashMap<String, History>) {

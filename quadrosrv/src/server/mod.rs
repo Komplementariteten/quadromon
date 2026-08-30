@@ -1,7 +1,10 @@
 pub mod load;
 
+use crate::client::sensor_dto::SensorDto;
+use crate::consts::{DEFAULT_SOCKET, SEPERATOR};
 use crate::sensors::Config;
-use std::fs::{remove_file, File};
+use log::{error, info};
+use std::fs::{File, remove_file};
 use std::io::Write;
 use std::net::Shutdown;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -10,42 +13,24 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::{fs, thread};
+use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-const MAX_PACKAGE_SIZE: usize = 1024;
+const MAX_CASE_SIZE: usize = 1024;
 
 pub struct SensorServer;
-
-#[derive(Debug, Copy, Clone)]
-struct Package {
-    size: u32,
-    c: [u8; MAX_PACKAGE_SIZE],
-}
-
-impl Package {}
-
-const DEFAULT_SOCKET: &str = "quadro.sock";
-
-const DEFAULT_DIR: &str = ".quadro/";
 
 static STOP_SYNC: AtomicBool = AtomicBool::new(false);
 
 impl SensorServer {
     fn local_socket() -> PathBuf {
-        let path = match dirs::home_dir() {
-            Some(path) => path,
-            None => panic!("Home dir not set"),
-        }
-            .join(DEFAULT_DIR);
+        let path = load::base_path();
+        let fs = path.join(DEFAULT_SOCKET);
         if !path.exists() {
-            std::fs::create_dir_all(&path).unwrap();
-            let fs = path.join(DEFAULT_SOCKET);
             File::create(&fs).unwrap();
-            return fs.join(DEFAULT_SOCKET);
         }
-        path.join(DEFAULT_SOCKET)
+        fs
     }
 
     fn init_socket() -> UnixStream {
@@ -77,9 +62,9 @@ impl SensorServer {
     }
 
     /// Actual Processing of the Socket Connection
-    fn server_th(rx: Receiver<Package>) -> JoinHandle<()> {
+    fn server_th(rx: Receiver<SensorDto>) -> JoinHandle<()> {
         thread::spawn(move || {
-            let mut cache: Vec<Package> = vec![];
+            let mut cache: Vec<SensorDto> = vec![];
             // let mut read_buff = vec![];
 
             let mut socket = SensorServer::init_socket();
@@ -105,17 +90,20 @@ impl SensorServer {
                 }
 
                 // Wenn Pakete im Cache sind, versuche, eines an den Socket zu schreiben
-                if let Some(l) = cache.pop() {
-                    if l.size < 1 {
-                        thread::sleep(Duration::from_millis(100));
-                        continue;
-                    }
-                    match socket.write_all(&l.c[..l.size as usize]) {
+                if let Some(sensor_dto) = cache.pop() {
+                    let bytes = bitcode::encode(&sensor_dto);
+                    let size = bytes.len();
+                    let mut data = SEPERATOR.to_vec();
+                    let size_bytes = bitcode::encode(&size);
+                    data.reserve(size_bytes.len() + bytes.len());
+                    data.extend(size_bytes);
+                    data.extend(bytes);
+                    match socket.write_all(&data) {
                         Ok(_) => {
                             println!("package successfully written");
                         }
                         Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                            cache.push(l); // Paket zurück in den Cache, wenn Socket nicht bereit ist
+                            cache.push(sensor_dto); // Paket zurück in den Cache, wenn Socket nicht bereit ist
                             thread::sleep(Duration::from_millis(5)); // Kurze Pause, um Busy-Waiting zu vermeiden
                         }
                         Err(e) => {
@@ -125,6 +113,11 @@ impl SensorServer {
                     }
                 } else {
                     thread::sleep(Duration::from_millis(5)); // Keine Pakete zum Senden, kurze Pause
+                }
+
+                if cache.len() > MAX_CASE_SIZE {
+                    error!("Cache size exceeded: {}", cache.len());
+                    break;
                 }
             }
             socket.shutdown(Shutdown::Both).unwrap();
@@ -136,18 +129,21 @@ impl SensorServer {
     }
 
     /// Triggers Modules for actual sensor reading
-    fn reader_thread(tx: Sender<Package>, config: &Config) -> JoinHandle<Config> {
+    fn reader_thread(tx: Sender<SensorDto>, config: &Config) -> JoinHandle<Config> {
         let mut local_cfg = config.clone();
         thread::spawn(move || {
             while !STOP_SYNC.load(Relaxed) {
                 for m in &mut local_cfg.modules {
-                    m.read();
+                    let exports = m.read();
+
+                    for dto in exports {
+                        match tx.send(dto) {
+                            Ok(_) => (),
+                            Err(e) => info!("failed to send sensor data: {:?}", e),
+                        }
+                    }
                 }
-                let d = [0u8; MAX_PACKAGE_SIZE];
-                tx.send(Package { size: MAX_PACKAGE_SIZE as u32, c: d })
-                    .expect("Failed to send package from sensor thread"); // Aussagekräftigere Fehlermeldung
-                println!("Package sent from sensor thread");
-                thread::sleep(Duration::from_millis(500));
+                thread::sleep(Duration::from_secs(2));
             }
             println!("Sensor thread finished.");
             local_cfg

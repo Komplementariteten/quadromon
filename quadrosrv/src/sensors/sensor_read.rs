@@ -1,9 +1,9 @@
-use glob::{glob_with, MatchOptions};
+use crate::sensors::{Module, SensorConfig, SensorReadResultWrapper};
+use glob::{MatchOptions, glob_with};
 use regex::{Regex, RegexBuilder};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use crate::sensors::{Module, SensorReadResultWrapper, SensorConfig};
 
 const REGEX_STR: &str = r"\S+/(?<sensor>[\w\d]{2,})\_(?<label>label+)$";
 pub const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
@@ -70,7 +70,10 @@ fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<SensorReadR
         let mut results = vec![];
         for file in files {
             if let Ok(file_content) = fs::read_to_string(&file) {
-                println!("Reading related file file {:?} with {:?}", file, file_content);
+                println!(
+                    "Reading related file file {:?} with {:?}",
+                    file, file_content
+                );
                 results.push(file_content);
             }
         }
@@ -116,8 +119,8 @@ fn find_module(config: &Module) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::sensors::{Config, SensorType};
     use super::*;
+    use crate::sensors::{Config, SensorType};
 
     #[test]
     fn test_find_module() {

@@ -1,5 +1,5 @@
-use vello::peniko::FontData;
 use vello::Scene;
+use vello::peniko::FontData;
 
 pub trait Component {
     fn title(&self) -> String;
@@ -10,6 +10,5 @@ pub trait Component {
 }
 
 pub enum ComponentType {
-    Chart
+    Chart,
 }
-

@@ -221,7 +221,7 @@ fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>)
         &render_cx.devices[surface.dev_id].device,
         RendererOptions::default(),
     )
-        .expect("Couldn't create renderer")
+    .expect("Couldn't create renderer")
 }
 
 /// Add shapes to a vello scene. This does not actually render the shapes, but adds them
@@ -260,7 +260,6 @@ fn add_shapes_to_scene(scene: &mut Scene) {
     let line_stroke_color = Color::new([0.5373, 0.7059, 0.9804, 1.]);
     scene.stroke(&stroke, Affine::IDENTITY, line_stroke_color, None, &line);
 
-
     fluxo::text_render::render_text_normal(scene, "Hallo Fluxo", 100., 100.);
-    fluxo::text_render::render_text_vertical(scene, "Vertical Text", 100. , 150.);
+    fluxo::text_render::render_text_vertical(scene, "Vertical Text", 100., 150.);
 }

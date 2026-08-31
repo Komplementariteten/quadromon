@@ -13,6 +13,7 @@
       <sourceFolder url="file://$MODULE_DIR$/quadromon/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/cargosrv/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/quadrosrv/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/client_server/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

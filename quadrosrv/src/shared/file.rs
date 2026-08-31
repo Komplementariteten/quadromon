@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::{env, fs};
 
 pub fn load_config() -> Option<Config> {
-    let cfg_path = base_path().join(CFG_FILE);
+    let cfg_path = init_base_dir().join(CFG_FILE);
 
     if cfg_path.exists() {
         if let Ok(bytes) = std::fs::read(&cfg_path) {
@@ -24,7 +24,7 @@ pub fn load_config() -> Option<Config> {
 }
 
 pub fn restore_cache(c: &mut Config) {
-    let path = base_path().join(HIST_FILE);
+    let path = init_base_dir().join(HIST_FILE);
 
     if let Some(maps) = load_hist(&path) {
         for mo in &mut c.modules {
@@ -52,11 +52,12 @@ fn load_hist(path: &PathBuf) -> Option<HashMap<String, HashMap<String, History>>
     None
 }
 
-pub(crate) fn init_base_dir() {
+fn init_base_dir() -> PathBuf {
     let path = base_path();
     if !path.exists() {
         std::fs::create_dir_all(&path).unwrap();
     }
+    path
 }
 
 pub(crate) fn base_path() -> PathBuf {
@@ -93,4 +94,15 @@ pub fn save(c: &Config) -> Result<(), std::io::Error> {
     }
 
     Err(std::io::Error::other("Failed to serialize as toml"))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::shared::file::init_base_dir;
+
+    #[test]
+    fn test_init_base_dir() {
+        init_base_dir();
+        assert_eq!(true, true);
+    }
 }

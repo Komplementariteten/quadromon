@@ -1,8 +1,6 @@
-pub mod load;
-
 use crate::client::sensor_dto::SensorDto;
 use crate::consts::{DEFAULT_SOCKET, SEPERATOR};
-use crate::sensors::Config;
+pub use crate::sensors::Config;
 use log::{error, info};
 use std::fs::{File, remove_file};
 use std::io::Write;
@@ -16,6 +14,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
+use crate::shared::icp::{bind_socket, local_socket};
 
 const MAX_CASE_SIZE: usize = 1024;
 
@@ -24,39 +23,13 @@ pub struct SensorServer;
 static STOP_SYNC: AtomicBool = AtomicBool::new(false);
 
 impl SensorServer {
-    fn local_socket() -> PathBuf {
-        let path = load::base_path();
-        let fs = path.join(DEFAULT_SOCKET);
-        if !path.exists() {
-            File::create(&fs).unwrap();
-        }
-        fs
-    }
-
-    fn init_socket() -> UnixStream {
-        let p = Self::local_socket();
-
-        match UnixStream::connect(&p) {
-            Ok(s) => s,
-            Err(_) => {
-                let listener = match UnixListener::bind(&p) {
-                    Ok(listener) => listener,
-                    Err(e) => panic!("failed to create socket: {}", e),
-                };
-                let addr = listener.local_addr().unwrap();
-                UnixStream::connect_addr(&addr)
-                    .unwrap_or_else(|e| panic!("Could not connect to socket with error: {}", e))
-            }
-        }
-    }
-
     pub fn stop(a: JoinHandle<()>, b: JoinHandle<Config>) -> Config {
         STOP_SYNC.store(true, Relaxed);
         a.join().expect("failed to join socket");
         let cfg = b.join().expect("failed to join socket");
-        let s_path = Self::local_socket();
+        let s_path = local_socket();
         if s_path.exists() {
-            remove_file(Self::local_socket()).expect("failed to remove socket file");
+            remove_file(local_socket()).expect("failed to remove socket file");
         }
         cfg
     }
@@ -67,7 +40,7 @@ impl SensorServer {
             let mut cache: Vec<SensorDto> = vec![];
             // let mut read_buff = vec![];
 
-            let mut socket = SensorServer::init_socket();
+            let mut socket = bind_socket();
             socket
                 .set_nonblocking(true)
                 .expect("Failed to set socket non-blocking"); // Socket auf nicht-blockierend setzen
@@ -121,7 +94,7 @@ impl SensorServer {
                 }
             }
             socket.shutdown(Shutdown::Both).unwrap();
-            remove_file(SensorServer::local_socket()).unwrap_or_else(|e| {
+            remove_file(local_socket()).unwrap_or_else(|e| {
                 println!("failed to remove socket: {:?}", e);
             });
             println!("Consumer thread finished.");

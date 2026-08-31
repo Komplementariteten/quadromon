@@ -1,15 +1,14 @@
 use log::error;
-use quadrosrv::sensors::Config;
-use quadrosrv::server;
-use quadrosrv::server::SensorServer;
+use quadrosrv::server::{SensorServer, Config};
 use std::process::ExitCode;
 use std::thread;
+use quadrosrv::shared::file;
 
 fn main() -> ExitCode {
     let mut cfg = Config::default();
-    if let Some(loaded_cfg) = server::load::load_config() {
+    if let Some(loaded_cfg) = file::load_config() {
         cfg = loaded_cfg;
-        server::load::restore_cache(&mut cfg);
+        file::restore_cache(&mut cfg);
     } else {
         cfg.init_default();
     }
@@ -20,7 +19,7 @@ fn main() -> ExitCode {
 
     let ncf = SensorServer::stop(srv, reader);
 
-    match server::load::save(&ncf) {
+    match file::save(&ncf) {
         Ok(_) => ExitCode::SUCCESS,
         Err(_) => {
             error!("Failed to save config");

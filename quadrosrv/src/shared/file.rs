@@ -93,7 +93,7 @@ pub fn save(c: &Config) -> Result<(), std::io::Error> {
         return Err(err);
     }
 
-    Err(std::io::Error::other("Failed to serialize as toml"))
+    Ok(())
 }
 
 #[cfg(test)]

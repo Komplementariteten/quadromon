@@ -1,3 +1,4 @@
+use std::process::ExitCode;
 use std::thread;
 use quadrosrv::client::Client;
 use quadrosrv::sensors::Config;
@@ -13,13 +14,14 @@ fn main() {
         cfg.init_default();
     }
 
+    cfg.verbose = true;
     let (srv, reader) = SensorServer::start(&cfg);
 
     /// thread::sleep(std::time::Duration::from_secs(10));
 
-    let c = Client::new();
+    let mut c = Client::new();
     
-    for _ in 0..10000 {
+    for _ in 0..1000 {
         if let Some(d) = c.read() {
             println!("{:?}", d);
         }
@@ -28,5 +30,11 @@ fn main() {
     
     let ncf = SensorServer::stop(srv, reader);
 
+    match file::save(&ncf) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Failed to save config {}", e);
+        }
+    }
     println!("Hello, world!");
 }

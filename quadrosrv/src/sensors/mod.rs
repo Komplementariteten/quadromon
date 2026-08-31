@@ -15,17 +15,19 @@ const MAINBOARD_MODULE: &str = "nct6687";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub(crate) modules: Vec<Module>,
+    #[serde(skip)]
+    pub verbose: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
 impl Config {
-    pub fn new() -> Self {
-        Config { modules: vec![] }
+    pub fn new(verbose: bool) -> Self {
+        Config { modules: vec![], verbose }
     }
 
     pub(crate) fn add_module(&mut self, module: Module) {

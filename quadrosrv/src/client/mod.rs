@@ -1,11 +1,15 @@
 use std::io::Read;
+use std::os::unix::net::UnixDatagram;
+use std::time::Duration;
 use log::{error, info};
 use crate::client::sensor_dto::SensorDto;
-use crate::shared::icp::bind_socket;
+use crate::shared::icp::{bind_socket_sream, connect_socket};
 
 pub mod sensor_dto;
 
-pub struct Client;
+pub struct Client {
+    ep: UnixDatagram   
+}
 
 impl Default for Client {
     fn default() -> Self {
@@ -13,16 +17,23 @@ impl Default for Client {
     }
 }
 
+impl Drop for Client {
+    fn drop(&mut self) {
+        if let Err(e) = self.ep.shutdown(std::net::Shutdown::Both) {
+            error!("Error shutting down socket: {}", e);
+        }
+    }
+}
+
 impl Client {
     pub fn new() -> Self {
-        Client
+        let s = connect_socket(Some(Duration::from_millis(1000)));
+        Client { ep: s }
     }
-    pub fn read(&self) -> Option<SensorDto> {
-        let mut s = bind_socket();
-        s.set_nonblocking(true).expect("Failed to set socket to non-blocking mode");
+    pub fn read(&mut self) -> Option<SensorDto> {
         let mut buff = vec![];
         let mut read_bytes: usize = 0;
-        match s.read_to_end(&mut buff) {
+        match self.ep.recv(&mut buff) {
             Ok(b) => { read_bytes = b }
             Err(e) => {
                 error!("Error reading from socket: {}", e);
@@ -47,11 +58,6 @@ impl Client {
         };
 
         info!("Received sensor data: {:?}", dto);
-
-        if let Err(e) = s.shutdown(std::net::Shutdown::Both) {
-            error!("Error shutting down socket: {}", e);
-            return None;
-        }
         None
     }
 }

@@ -4,6 +4,7 @@ use regex::{Regex, RegexBuilder};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use log::info;
 
 const REGEX_STR: &str = r"\S+/(?<sensor>[\w\d]{2,})\_(?<label>label+)$";
 pub const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
@@ -39,7 +40,7 @@ fn label_regex() -> &'static Regex {
     })
 }
 
-fn check_sensor(config: &SensorConfig, base_path: &str) -> Result<String, String> {
+fn check_sensor(config: &SensorConfig, base_path: &str, verbose: &bool) -> Result<String, String> {
     let re: &Regex = label_regex();
     let glob_opt = MatchOptions {
         case_sensitive: false,
@@ -52,7 +53,9 @@ fn check_sensor(config: &SensorConfig, base_path: &str) -> Result<String, String
         if let Ok(path) = &entry {
             let name = fs::read_to_string(path).expect("failed to read file");
             if name.trim() == config.name {
-                println!("Found match {:?}", path);
+                if *verbose {
+                    info!("Found match {:?}", path);
+                }
                 if let Some(caps) = re.captures(&entry.unwrap().to_str().unwrap())
                     && let Some(match_name) = caps.name("sensor")
                 {
@@ -64,16 +67,18 @@ fn check_sensor(config: &SensorConfig, base_path: &str) -> Result<String, String
     Err(format!("{:?} could not be read", config))
 }
 
-fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<SensorReadResultWrapper> {
-    if let Ok(s_name) = check_sensor(config, base_path.to_str().unwrap()) {
+fn read_sensor(config: &SensorConfig, base_path: &PathBuf, verbose: &bool) -> Option<SensorReadResultWrapper> {
+    if let Ok(s_name) = check_sensor(config, base_path.to_str().unwrap(), verbose) {
         let files = config.related_files(&PathBuf::from(base_path), s_name.as_str());
         let mut results = vec![];
         for file in files {
             if let Ok(file_content) = fs::read_to_string(&file) {
-                println!(
-                    "Reading related file file {:?} with {:?}",
-                    file, file_content
-                );
+                if *verbose  {
+                    info!(
+                        "Reading related file file {:?} with {:?}",
+                        file, file_content
+                    );
+                }
                 results.push(file_content);
             }
         }
@@ -91,11 +96,11 @@ fn read_sensor(config: &SensorConfig, base_path: &PathBuf) -> Option<SensorReadR
     None
 }
 
-pub(crate) fn read(module: &Module) -> Vec<SensorReadResultWrapper> {
+pub(crate) fn read(module: &Module, verbose: &bool) -> Vec<SensorReadResultWrapper> {
     let mut results = vec![];
     if let Ok(mod_path) = find_module(module) {
         for sensor in &module.sensors {
-            if let Some(result) = read_sensor(sensor, &mod_path) {
+            if let Some(result) = read_sensor(sensor, &mod_path, verbose) {
                 results.push(result)
             }
         }
@@ -133,14 +138,14 @@ mod tests {
     #[test]
     fn test_check_sensor() {
         let cfg = SensorConfig::new("Flow speed [dL/h]", SensorType::FlowSpeed);
-        let r = check_sensor(&cfg, "/sys/class/hwmon/hwmon6");
+        let r = check_sensor(&cfg, "/sys/class/hwmon/hwmon6", &true);
         assert!(r.is_ok());
     }
 
     #[test]
     fn test_read_sensor() {
         let cfg = SensorConfig::new("Flow speed [dL/h]", SensorType::FlowSpeed);
-        let r = read_sensor(&cfg, &PathBuf::from("/sys/class/hwmon/hwmon6"));
+        let r = read_sensor(&cfg, &PathBuf::from("/sys/class/hwmon/hwmon6"), &true);
         assert!(r.is_some());
     }
 }

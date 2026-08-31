@@ -1,8 +1,9 @@
 use crate::client::sensor_dto::SensorDto;
 use crate::consts::{DEFAULT_SOCKET, SEPERATOR};
 pub use crate::sensors::Config;
-use log::{error, info};
+use log::{debug, error, info, warn};
 use std::fs::{File, remove_file};
+use std::io::ErrorKind::NotConnected;
 use std::io::Write;
 use std::net::Shutdown;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -35,15 +36,13 @@ impl SensorServer {
     }
 
     /// Actual Processing of the Socket Connection
-    fn server_th(rx: Receiver<SensorDto>) -> JoinHandle<()> {
+    /// Using datagram socket
+    fn server_th(rx: Receiver<SensorDto>, verbose: bool) -> JoinHandle<()> {
         thread::spawn(move || {
             let mut cache: Vec<SensorDto> = vec![];
             // let mut read_buff = vec![];
 
             let mut socket = bind_socket();
-            socket
-                .set_nonblocking(true)
-                .expect("Failed to set socket non-blocking"); // Socket auf nicht-blockierend setzen
 
             while !STOP_SYNC.load(Relaxed) {
                 // Versuche, ein Paket mit Timeout zu empfangen, um nicht ewig zu blockieren
@@ -53,11 +52,13 @@ impl SensorServer {
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         // Kein Paket empfangen, weiter zum Socket-Check
-                        println!("timeout waiting for package...");
+                        if verbose {
+                            debug!("timeout waiting for package...");
+                        }
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => {
                         // Sender wurde geschlossen, Haupt-Thread möchte uns beenden
-                        println!("Consumer thread sender disconnected. Exiting.");
+                        error!("Consumer thread sender disconnected. Exiting.");
                         break;
                     }
                 }
@@ -71,17 +72,19 @@ impl SensorServer {
                     data.reserve(size_bytes.len() + bytes.len());
                     data.extend(size_bytes);
                     data.extend(bytes);
-                    match socket.write_all(&data) {
+                    match socket.send(&data) {
                         Ok(_) => {
-                            println!("package successfully written");
+                            info!("package successfully written");
                         }
                         Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                             cache.push(sensor_dto); // Paket zurück in den Cache, wenn Socket nicht bereit ist
                             thread::sleep(Duration::from_millis(5)); // Kurze Pause, um Busy-Waiting zu vermeiden
                         }
                         Err(e) => {
-                            eprintln!("Error writing to socket in consumer thread: {:?}", e);
-                            thread::sleep(Duration::from_millis(5));
+                            if e.kind() != NotConnected {
+                                warn!("Error writing to socket in consumer thread: {:?}", e);
+                                thread::sleep(Duration::from_millis(5));
+                            }
                         }
                     }
                 } else {
@@ -95,9 +98,9 @@ impl SensorServer {
             }
             socket.shutdown(Shutdown::Both).unwrap();
             remove_file(local_socket()).unwrap_or_else(|e| {
-                println!("failed to remove socket: {:?}", e);
+                error!("failed to remove socket: {:?}", e);
             });
-            println!("Consumer thread finished.");
+            info!("Network middleware thread finished.");
         })
     }
 
@@ -107,7 +110,7 @@ impl SensorServer {
         thread::spawn(move || {
             while !STOP_SYNC.load(Relaxed) {
                 for m in &mut local_cfg.modules {
-                    let exports = m.read();
+                    let exports = m.read(&local_cfg.verbose);
 
                     for dto in exports {
                         match tx.send(dto) {
@@ -118,16 +121,25 @@ impl SensorServer {
                 }
                 thread::sleep(Duration::from_secs(2));
             }
-            println!("Sensor thread finished.");
+            info!("Reader thread finished.");
             local_cfg
         })
     }
 
     pub fn start(config: &Config) -> (JoinHandle<()>, JoinHandle<Config>) {
         let (tx, rx) = mpsc::channel();
-        let sender_h = SensorServer::server_th(rx);
+        let sender_h = SensorServer::server_th(rx, config.verbose);
         let sensor_h = SensorServer::reader_thread(tx.clone(), config);
         (sender_h, sensor_h)
+    }
+}
+
+impl Drop for SensorServer {
+    fn drop(&mut self) {
+        let f = local_socket();
+        if f.exists() {
+            remove_file(f).expect("Failed to remove local socket file");
+        }
     }
 }
 

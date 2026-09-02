@@ -26,7 +26,7 @@ impl Module {
     }
 
     // Read from all Sensors in Module
-    pub fn read(&mut self, verbose:&bool) -> Vec<SensorDto> {
+    pub fn read(&mut self, verbose: &bool) -> Vec<SensorDto> {
         let mut dtos = vec![];
         info!("Reading {}", self.module_name);
         let results = sensor_read::read(self, verbose);

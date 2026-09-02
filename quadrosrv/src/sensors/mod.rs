@@ -27,7 +27,10 @@ impl Default for Config {
 
 impl Config {
     pub fn new(verbose: bool) -> Self {
-        Config { modules: vec![], verbose }
+        Config {
+            modules: vec![],
+            verbose,
+        }
     }
 
     pub(crate) fn add_module(&mut self, module: Module) {

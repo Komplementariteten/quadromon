@@ -1,10 +1,10 @@
 use crate::sensors::{Module, SensorConfig, SensorReadResultWrapper};
 use glob::{MatchOptions, glob_with};
+use log::info;
 use regex::{Regex, RegexBuilder};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use log::info;
 
 const REGEX_STR: &str = r"\S+/(?<sensor>[\w\d]{2,})\_(?<label>label+)$";
 pub const HWMON_CLASS_PATH: &str = "/sys/class/hwmon/";
@@ -67,13 +67,17 @@ fn check_sensor(config: &SensorConfig, base_path: &str, verbose: &bool) -> Resul
     Err(format!("{:?} could not be read", config))
 }
 
-fn read_sensor(config: &SensorConfig, base_path: &PathBuf, verbose: &bool) -> Option<SensorReadResultWrapper> {
+fn read_sensor(
+    config: &SensorConfig,
+    base_path: &PathBuf,
+    verbose: &bool,
+) -> Option<SensorReadResultWrapper> {
     if let Ok(s_name) = check_sensor(config, base_path.to_str().unwrap(), verbose) {
         let files = config.related_files(&PathBuf::from(base_path), s_name.as_str());
         let mut results = vec![];
         for file in files {
             if let Ok(file_content) = fs::read_to_string(&file) {
-                if *verbose  {
+                if *verbose {
                     info!(
                         "Reading related file file {:?} with {:?}",
                         file, file_content

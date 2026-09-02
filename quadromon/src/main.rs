@@ -1,8 +1,8 @@
 use log::error;
-use quadrosrv::server::{SensorServer, Config};
+use quadrosrv::server::{Config, SensorServer};
+use quadrosrv::shared::file;
 use std::process::ExitCode;
 use std::thread;
-use quadrosrv::shared::file;
 
 fn main() -> ExitCode {
     let mut cfg = Config::default();

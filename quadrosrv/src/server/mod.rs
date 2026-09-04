@@ -11,7 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
+use std::{mem, thread};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -133,6 +133,7 @@ fn handle_connection(
             let size_bytes = size.to_ne_bytes();
             let total = size_bytes.len() + bytes.len() + SEPERATOR.len();
             let byte_lign = total % 8;
+            info!("first:{:#04X?}, last:{:#04X?}", bytes[0], bytes[bytes.len() - ex - 1]);
             data.reserve(total + byte_lign);
             data.extend(size_bytes);
             data.extend(bytes);
@@ -140,7 +141,7 @@ fn handle_connection(
 
             match client.write_all(&data) {
                 Ok(_) => {
-                    client.flush().expect("Failed to flush data to client");
+                    client.flush().expect("Failed to flush socket");
                     info!("package successfully written to socket");
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -151,22 +152,23 @@ fn handle_connection(
                     if e.kind() != NotConnected {
                         warn!("Error writing to socket in consumer thread: {:?}", e);
                         CLIENT_CONNECTED.store(false, Relaxed);
-                        thread::sleep(Duration::from_millis(5));
+                        thread::sleep(Duration::from_millis(50));
                     }
                     return Err(e);
                 }
             }
         } else {
-            thread::sleep(Duration::from_millis(5)); // Keine Pakete zum Senden, kurze Pause
+            thread::sleep(Duration::from_millis(50)); // Keine Pakete zum Senden, kurze Pause
         }
 
         if cache.len() > MAX_CASE_SIZE {
-            error!("Cache size exceeded: {}", cache.len());
+            println!("Cache size exceeded: {}", cache.len());
             for _ in 0..MAX_CASE_SIZE / 3 {
                 let _ = cache.pop();
             }
         }
     }
+    info!("Connection server stopped");
     Ok(())
 }
 

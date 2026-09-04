@@ -15,26 +15,25 @@ fn main() {
         cfg.init_default();
     }
 
-    cfg.verbose = true;
+    // cfg.verbose = true;
     let (srv, reader) = SensorServer::start(&cfg);
 
     /// thread::sleep(std::time::Duration::from_secs(10));
     let mut c = Client::new();
 
-    for _ in 0..1000 {
-        if let Some(d) = c.read() {
-            println!("{:?}", d);
-        }
-        thread::sleep(std::time::Duration::from_millis(20));
-    }
+    let mut read_count = 0;
 
-    let ncf = SensorServer::stop(srv, reader);
-
-    match file::save(&ncf) {
-        Ok(_) => (),
-        Err(e) => {
-            eprintln!("Failed to save config {}", e);
-        }
+    while read_count < 100 {
+        if let Some(_) = c.read() {
+            read_count += 1;
+            println!("Data read {read_count}");
+        };
+        
+        thread::sleep(std::time::Duration::from_millis(10));
     }
-    println!("Hello, world!");
+    c.stop();
+
+    println!("Trying to stop server");
+    let _ = SensorServer::stop(srv, reader);
+    println!("Server stopped");
 }

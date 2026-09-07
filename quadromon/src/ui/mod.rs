@@ -14,7 +14,7 @@ pub(crate) trait EventDrivenPlugin {
     fn get_component(&self) -> Option<&Self::Component>;
 }
 
-pub fn run<Plugin: EventDrivenPlugin>(plugins: Vec<Plugin>) -> Result<()> {
+pub fn run_app<Plugin: EventDrivenPlugin>(plugins: Vec<Plugin>) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
         run_linux(plugins)

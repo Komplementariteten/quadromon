@@ -3,6 +3,9 @@ use quadrosrv::server::{Config, SensorServer};
 use quadrosrv::shared::file;
 use std::process::ExitCode;
 use std::thread;
+use crate::ui::sensor_handle::SensorHandle;
+
+mod ui;
 
 fn main() -> ExitCode {
     let mut cfg = Config::default();
@@ -15,7 +18,7 @@ fn main() -> ExitCode {
 
     let (srv, reader) = SensorServer::start(&cfg);
 
-    thread::sleep(std::time::Duration::from_secs(10));
+    ui::run_app(vec![SensorHandle::new()]).expect("Failed to run app");
 
     let ncf = SensorServer::stop(srv, reader);
 

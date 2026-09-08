@@ -32,7 +32,7 @@ impl Processing {
         }
         let l = self.last.clone().unwrap();
         Some(SensorDto {
-            name: n.to_string(),
+            name: l.source,
             current: l.value,
             unit: l.unit,
             values: self.hist.clone().unwrap().values,
@@ -86,6 +86,4 @@ impl Processing {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-}
+mod tests {}

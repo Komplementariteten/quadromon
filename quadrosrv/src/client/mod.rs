@@ -2,10 +2,10 @@ use crate::client::sensor_dto::SensorDto;
 use crate::consts::SEPERATOR;
 use crate::shared::icp::connect_socket;
 use log::{error, info, warn};
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Write};
 use std::net::TcpStream;
-use std::{mem, thread};
 use std::time::Duration;
+use std::{mem, thread};
 
 pub mod sensor_dto;
 
@@ -50,16 +50,35 @@ impl Client {
         let buf_size = self.buf.len();
         if self.buf[buf_size - SEPERATOR.len()..buf_size] == SEPERATOR {
             let usize_bytes = mem::size_of::<usize>();
+            println!("Received package of size {}", buf_size);
             let size_bytes = self.buf[..usize_bytes].to_vec();
             let payload_size = usize::from_ne_bytes(size_bytes.try_into().unwrap());
             let payload = self.buf[usize_bytes..(payload_size + usize_bytes)].to_vec();
-            info!("first:{:#04X?}, last:{:#04X?}", payload[0], payload[payload_size - 1]);
+            info!(
+                "first:{:#04X?}, last:{:#04X?}",
+                payload[0],
+                payload[payload_size - 1]
+            );
             if let Ok(dto) = bitcode::decode(&payload) {
                 return Some(dto);
             }
-            warn!("Failed to decode package, end {:#04X?}", payload[payload.len() - SEPERATOR.len()..].to_vec());
+            warn!(
+                "Failed to decode package, end {:#04X?}",
+                payload[payload.len() - SEPERATOR.len()..].to_vec()
+            );
         }
         None
+    }
+    
+    fn finish_read(&mut self) {
+        self.buf.clear();
+        let handshake: [u8; 4] = [0; 4];
+        match self.ep.write(&handshake) {
+            Ok(s) => {}
+            Err(e) => {
+                error!("failed to write handshake, {}", e)
+            }
+        };
     }
 
     pub fn read(&mut self) -> Option<SensorDto> {
@@ -73,6 +92,7 @@ impl Client {
                     self.buf.extend_from_slice(&read_buff[..n]);
                     if let Some(package) = self.handle_buff() {
                         seen_package = true;
+                        self.finish_read();
                         return Some(package);
                     }
                 }
@@ -85,7 +105,9 @@ impl Client {
                 }
             }
             thread::sleep(Duration::from_millis(5));
-        };
+        }
+
+        
         None
     }
 

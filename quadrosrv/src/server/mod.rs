@@ -5,7 +5,7 @@ use crate::shared::icp::{bind_socket_dgram, bind_socket_listener, srv_socket_fil
 use log::{debug, error, info, warn};
 use std::fs::{remove_file};
 use std::io::ErrorKind::NotConnected;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
@@ -104,6 +104,9 @@ fn handle_connection(
         // Versuche, ein Paket mit Timeout zu empfangen, um nicht ewig zu blockieren
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(package) => {
+                if verbose {
+                    info!("Received package: {}.{}", package.module, package.name);
+                }
                 cache.push(package);
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -125,6 +128,7 @@ fn handle_connection(
         if let Some(sensor_dto) = cache.pop() {
             let mut bytes = bitcode::encode(&sensor_dto);
             let size = bytes.len();
+            println!("Writing sensor data: {}.{} {}bytes", sensor_dto.module, sensor_dto.name, size);
             let ex = size % 8;
             (0..ex).for_each(|_| {
                 bytes.push(0);
@@ -133,7 +137,9 @@ fn handle_connection(
             let size_bytes = size.to_ne_bytes();
             let total = size_bytes.len() + bytes.len() + SEPERATOR.len();
             let byte_lign = total % 8;
-            info!("first:{:#04X?}, last:{:#04X?}", bytes[0], bytes[bytes.len() - ex - 1]);
+            if verbose {
+                info!("first:{:#04X?}, last:{:#04X?}", bytes[0], bytes[bytes.len() - ex - 1]);
+            }
             data.reserve(total + byte_lign);
             data.extend(size_bytes);
             data.extend(bytes);
@@ -141,8 +147,11 @@ fn handle_connection(
 
             match client.write_all(&data) {
                 Ok(_) => {
+                    thread::sleep(Duration::from_millis(5));
                     client.flush().expect("Failed to flush socket");
-                    info!("package successfully written to socket");
+                    if verbose {
+                        info!("package successfully written to socket");
+                    }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     cache.push(sensor_dto); // Paket zurück in den Cache, wenn Socket nicht bereit ist
@@ -157,6 +166,21 @@ fn handle_connection(
                     return Err(e);
                 }
             }
+            
+            info!("Write done, waiting for hand shake");
+            // Ensure that we get a handchake
+            let mut buff: [u8; 4] = [0; 4];
+            match client.read_exact(&mut buff) {
+                Ok(_) => {
+                    info!("Received handshake from client");
+                }
+                Err(e) => {
+                    warn!("Error receiving handshake from client: {:?}", e);
+                    thread::sleep(Duration::from_millis(50));
+                    return Err(e);
+                }
+            }
+            
         } else {
             thread::sleep(Duration::from_millis(50)); // Keine Pakete zum Senden, kurze Pause
         }

@@ -45,17 +45,11 @@ pub fn connect_socket(wait: Option<Duration>) -> TcpStream {
             Err(e) => panic!("failed to connect socket: {}", e),
         };
         client
-            .set_nonblocking(true)
-            .expect("Failed to set nonblocking");
-        client
     } else {
         let client = match TcpStream::connect(format!("127.0.0.1:{}", SRV_PORT)) {
             Ok(c) => c,
             Err(e) => panic!("failed to connect socket: {}", e),
         };
-        client
-            .set_nonblocking(true)
-            .expect("Failed to set nonblocking");
         client
     }
 }

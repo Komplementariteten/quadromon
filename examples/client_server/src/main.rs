@@ -24,9 +24,9 @@ fn main() {
     let mut read_count = 0;
 
     while read_count < 100 {
-        if let Some(_) = c.read() {
+        if let Some(s) = c.read() {
             read_count += 1;
-            println!("Data read {read_count}");
+            println!("Data read {}: {}.{}", read_count, s.module, s.name);
         };
         
         thread::sleep(std::time::Duration::from_millis(10));

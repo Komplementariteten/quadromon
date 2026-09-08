@@ -74,7 +74,11 @@ impl Client {
         self.buf.clear();
         let handshake: [u8; 4] = [0; 4];
         match self.ep.write(&handshake) {
-            Ok(s) => {}
+            Ok(s) => {
+                if s != handshake.len() {
+                    error!("failed to write handshake, wrote {} bytes", s);
+                }
+            }
             Err(e) => {
                 error!("failed to write handshake, {}", e)
             }
@@ -104,74 +108,9 @@ impl Client {
                     thread::sleep(Duration::from_millis(20));
                 }
             }
-            thread::sleep(Duration::from_millis(5));
         }
 
         
         None
-    }
-
-    pub fn read_old(&mut self) -> Option<SensorDto> {
-        let mut reader = BufReader::new(&self.ep);
-
-        let mut buff = [0; 8];
-        let mut expected_bytes: usize = 0;
-        let mut read_bytes: usize = 0;
-        let mut seen_package: bool = false;
-        let mut package_bytes = vec![];
-        let mut read_error = 0;
-        while !seen_package {
-            match reader.read_exact(&mut buff) {
-                Ok(b) => {
-                    read_bytes = 8;
-                }
-                Err(e) => {
-                    // error!("Error reading from socket: {}", e);
-                    read_error += 1;
-                    if read_error > 10 {
-                        return None;
-                    }
-                }
-            }
-
-            if read_bytes == 8 && expected_bytes == 0 {
-                expected_bytes = u64::from_ne_bytes(buff) as usize;
-                continue;
-            }
-
-            if buff[0..read_bytes] == SEPERATOR {
-                seen_package = true;
-                break;
-            }
-
-            if expected_bytes >= package_bytes.len() {
-                package_bytes.extend_from_slice(&buff[0..read_bytes]);
-            }
-        }
-
-        if expected_bytes > package_bytes.len() {
-            let last = package_bytes.last_chunk::<8>()?;
-            error!(
-                "Error reading from socket: Invalid package size {:#04X?}",
-                last
-            );
-            return None;
-        }
-
-        if expected_bytes != package_bytes.len() {
-            package_bytes = package_bytes[..expected_bytes].to_vec();
-        }
-
-        let dto: SensorDto = match bitcode::decode(&package_bytes) {
-            Ok(dto) => dto,
-            Err(e) => {
-                error!("Error decoding bitcode: {}", e);
-                return None;
-            }
-        };
-
-        expected_bytes = 0;
-        package_bytes.clear();
-        Some(dto)
     }
 }
